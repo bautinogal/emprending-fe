@@ -1,5 +1,6 @@
 import { useState, useEffect, type SyntheticEvent } from 'react'
 import './App.css'
+import { main } from './theme'
 
 import * as React from 'react';
 import { Box, Button, Divider, Drawer, IconButton, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Tab, Tabs, Typography } from '@mui/material';
@@ -177,9 +178,7 @@ const Maraton = () => {
             const lastNameMatch = prefParts[prefParts.length - 1] === gtParts[gtParts.length - 1];
             const firstInitialMatch = prefParts[0].charAt(0) === gtParts[0].charAt(0);
             if (lastNameMatch && prefParts[0].length <= 2 && firstInitialMatch) {
-              // Boost similarity for abbreviation matches
-              maxSimilarity = Math.max(maxSimilarity, 0.95);
-              continue;
+              // Remove abbreviation boost to match warning system - do nothing
             }
           }
 
@@ -188,10 +187,10 @@ const Maraton = () => {
           }
         }
 
-        // Apply threshold: 1.0 = exact match only, 0.0 = accept any similarity
+        // Apply strict threshold: only exact matches (like warning system)
         const adjustedThreshold = 1.0 - similarityThreshold; // Invert so slider is intuitive
         if (maxSimilarity >= adjustedThreshold) {
-          score += weight * maxSimilarity; // Weight the score by similarity
+          score += weight; // Give full weight for valid matches only
         }
       }
 
@@ -236,6 +235,21 @@ const Maraton = () => {
       });
 
       return warnings;
+    };
+
+    // Calculate perfect score (if all students got all their preferred tutors)
+    const calculatePerfectScore = () => {
+      let perfectScore = 0;
+      alumnosData.forEach((alumno) => {
+        for (let i = 1; i <= 5; i++) {
+          const tutorPref = alumno[`Tutor${i}`];
+          if (tutorPref) {
+            const weight = pesoRelativoTutores[i - 1] || 0;
+            perfectScore += weight; // Assume perfect match (score = weight)
+          }
+        }
+      });
+      return perfectScore;
     };
 
     // Function to create and evaluate groups for a specific count
@@ -355,6 +369,10 @@ const Maraton = () => {
       console.warn('Tutor validation warnings:', tutorWarnings);
     }
 
+    // Calculate the theoretical perfect score
+    const perfectScore = calculatePerfectScore();
+    console.log(`Perfect score (theoretical maximum): ${perfectScore.toFixed(1)}`);
+
     // Try all group counts and find the best one
     let bestConfiguration = null;
     let bestScore = -1;
@@ -384,7 +402,8 @@ const Maraton = () => {
         ...bestConfiguration,
         timestamp: new Date().toISOString(),
         selectedGroupCount: bestConfiguration.cantidadGrupos,
-        tutorWarnings: tutorWarnings
+        tutorWarnings: tutorWarnings,
+        perfectScore: perfectScore
       });
 
       console.log(`Optimal configuration: ${bestConfiguration.cantidadGrupos} groups with total score: ${bestConfiguration.totalScore.toFixed(2)}`);
@@ -417,9 +436,9 @@ const Maraton = () => {
       field: header,
       headerName: header,
       width: header === 'Descripción' ? 250 :
-             header === 'Email' ? 200 :
-             header === 'Nombre' || header === 'Apellido' ? 120 :
-             header === 'Puntaje' ? 80 : 150,
+        header === 'Email' ? 200 :
+          header === 'Nombre' || header === 'Apellido' ? 120 :
+            header === 'Puntaje' ? 80 : 150,
       sortable: true,
     }));
 
@@ -659,7 +678,7 @@ const Maraton = () => {
           const lastNameMatch = parts1[parts1.length - 1] === parts2[parts2.length - 1];
           const firstInitialMatch = parts1[0].charAt(0) === parts2[0].charAt(0);
           if (lastNameMatch && parts1[0].length <= 2 && firstInitialMatch) {
-            return 0.95;
+            return 0; // No abbreviation matching - strict only
           }
         }
 
@@ -787,11 +806,10 @@ const Maraton = () => {
 
       {/* Statistics Summary */}
       <Box sx={{ mb: 3, p: 2, bgcolor: 'background.paper', borderRadius: 1, boxShadow: 1 }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>Resumen</Typography>
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 2 }}>
           <Box>
             <Typography variant="caption" color="text.secondary">Grupos Óptimos</Typography>
-            <Typography variant="h6" color="primary.main">{assignmentResults.selectedGroupCount || assignmentResults.cantidadGrupos}</Typography>
+            <Typography variant="h6" >{assignmentResults.selectedGroupCount || assignmentResults.cantidadGrupos}</Typography>
           </Box>
           <Box>
             <Typography variant="caption" color="text.secondary">Total Alumnos</Typography>
@@ -809,10 +827,49 @@ const Maraton = () => {
           </Box>
           <Box>
             <Typography variant="caption" color="text.secondary">Puntuación Total</Typography>
-            <Typography variant="h6">{assignmentResults.totalScore?.toFixed(1) || '-'}</Typography>
+            <Typography variant="h6" color={(() => {
+              const percentage = (assignmentResults.totalScore / assignmentResults.perfectScore) * 100;
+              return percentage >= 70 ? 'success.main' : percentage >= 50 ? 'warning.main' : 'error.main';
+            })()}>
+              {((assignmentResults.totalScore / assignmentResults.perfectScore) * 100).toFixed(1)}%
+            </Typography>
           </Box>
           <Box>
-            <Typography variant="caption" color="text.secondary">Promedio por Grupo</Typography>
+            <Typography variant="caption" color="text.secondary">Satisfacción Promedio</Typography>
+            <Typography variant="h6" color={(() => {
+              // Calculate average satisfaction
+              let totalSatisfaction = 0;
+              let totalStudents = 0;
+              assignmentResults.groups.forEach((group: any) => {
+                group.alumnos.forEach((alumno: any) => {
+                  const { score, maxScore } = calculateMatchScore(alumno, group.tutores);
+                  const satisfaction = maxScore > 0 ? (score / maxScore) * 100 : 0;
+                  totalSatisfaction += satisfaction;
+                  totalStudents++;
+                });
+              });
+              const avgSatisfaction = totalStudents > 0 ? totalSatisfaction / totalStudents : 0;
+              return avgSatisfaction >= 70 ? 'success.main' : avgSatisfaction >= 50 ? 'warning.main' : 'error.main';
+            })()}>
+              {(() => {
+                // Calculate and display average satisfaction
+                let totalSatisfaction = 0;
+                let totalStudents = 0;
+                assignmentResults.groups.forEach((group: any) => {
+                  group.alumnos.forEach((alumno: any) => {
+                    const { score, maxScore } = calculateMatchScore(alumno, group.tutores);
+                    const satisfaction = maxScore > 0 ? (score / maxScore) * 100 : 0;
+                    totalSatisfaction += satisfaction;
+                    totalStudents++;
+                  });
+                });
+                const avgSatisfaction = totalStudents > 0 ? totalSatisfaction / totalStudents : 0;
+                return avgSatisfaction.toFixed(1);
+              })()}%
+            </Typography>
+          </Box>
+          <Box>
+            <Typography variant="caption" color="text.secondary">Prom. Alumnos por Grupo</Typography>
             <Typography variant="h6">{assignmentResults.statistics.avgGroupSize}</Typography>
           </Box>
         </Box>
@@ -880,85 +937,954 @@ const Maraton = () => {
 
       {/* Groups Details */}
       <Box sx={{ flex: 1, overflow: 'auto' }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>Grupos Formados</Typography>
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {assignmentResults.groups.map((group: any) => (
-            <Box key={group.id} sx={{
+        <Box sx={{
+          border: '1px solid',
+          borderColor: 'divider',
+          borderRadius: 1,
+          mb: 2
+        }}>
+          <Box
+            sx={{
               p: 2,
-              border: '1px solid',
-              borderColor: 'divider',
-              borderRadius: 1,
-              bgcolor: 'background.paper'
-            }}>
-              <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                <Typography variant="subtitle1" fontWeight={600}>
-                  {group.name}
-                </Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {group.alumnos.length} / {group.maxCapacity} alumnos
-                </Typography>
-              </Box>
-
-              <Box sx={{ mb: 1 }}>
-                <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                  Tutores:
-                </Typography>
-                <Typography variant="body2">
-                  {group.tutores.join(', ')}
-                </Typography>
-              </Box>
-
-              {group.alumnos.length > 0 && (
-                <Box>
-                  <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                    Alumnos:
-                  </Typography>
-                  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                    {group.alumnos.map((alumno: any, index: number) => {
-                      const { score, maxScore } = calculateMatchScore(alumno, group.tutores);
-                      const percentage = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
-
-                      return (
-                        <Box key={index} sx={{
-                          px: 1,
-                          py: 0.5,
-                          bgcolor: 'grey.100',
-                          borderRadius: 0.5,
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 1
-                        }}>
-                          <Typography variant="body2">
-                            {alumno.Nombre} {alumno.Apellido}
-                          </Typography>
-                          <Typography variant="caption" sx={{
-                            color: percentage >= 75 ? 'success.main' :
-                                   percentage >= 50 ? '#FFC107' :
-                                   percentage >= 25 ? 'warning.dark' :
-                                   'error.main',
-                            fontWeight: 600
-                          }}>
-                            ({score}/{maxScore})
-                          </Typography>
-                        </Box>
-                      );
-                    })}
+              bgcolor: 'grey.50',
+              borderRadius: '4px 4px 0 0',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              '&:hover': { bgcolor: 'grey.100' }
+            }}
+            onClick={() => {
+              const element = document.getElementById('groups-content');
+              if (element) {
+                element.style.display = element.style.display === 'none' ? 'block' : 'none';
+              }
+              const arrow = document.getElementById('groups-arrow');
+              if (arrow) {
+                arrow.style.transform = arrow.style.transform === 'rotate(180deg)' ? 'rotate(0deg)' : 'rotate(180deg)';
+              }
+            }}
+          >
+            <Typography variant="h6">
+              👥 Grupos Formados ({assignmentResults.groups.length})
+            </Typography>
+            <Typography
+              id="groups-arrow"
+              variant="h6"
+              sx={{
+                transition: 'transform 0.2s',
+                userSelect: 'none'
+              }}
+            >
+              ▼
+            </Typography>
+          </Box>
+          <Box
+            id="groups-content"
+            sx={{
+              p: 2,
+              pt: 0,
+              display: 'block'
+            }}
+          >
+            <Box sx={{ maxHeight: 400, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
+              {assignmentResults.groups.map((group: any) => (
+                <Box key={group.id} sx={{
+                  p: 2,
+                  border: '1px solid',
+                  borderColor: 'divider',
+                  borderRadius: 1,
+                  bgcolor: 'background.paper'
+                }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                    <Typography variant="subtitle1" fontWeight={600}>
+                      {group.name}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {group.alumnos.length} / {group.maxCapacity} alumnos
+                    </Typography>
                   </Box>
+
+                  <Box sx={{ mb: 1 }}>
+                    <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                      Tutores:
+                    </Typography>
+                    <Typography variant="body2">
+                      {group.tutores.join(', ')}
+                    </Typography>
+                  </Box>
+
+                  {group.alumnos.length > 0 && (
+                    <Box>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                        Alumnos:
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                        {group.alumnos.map((alumno: any, index: number) => {
+                          const { score, maxScore } = calculateMatchScore(alumno, group.tutores);
+                          const percentage = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
+
+                          return (
+                            <Box key={index} sx={{
+                              px: 1,
+                              py: 0.5,
+                              bgcolor: 'grey.100',
+                              borderRadius: 0.5,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 1
+                            }}>
+                              <Typography variant="body2">
+                                {alumno.Nombre} {alumno.Apellido}
+                              </Typography>
+                              <Typography variant="caption" sx={{
+                                color: percentage >= 75 ? 'success.main' :
+                                  percentage >= 50 ? '#FFC107' :
+                                    percentage >= 25 ? 'warning.dark' :
+                                      'error.main',
+                                fontWeight: 600
+                              }}>
+                                ({score}/{maxScore})
+                              </Typography>
+                            </Box>
+                          );
+                        })}
+                      </Box>
+                    </Box>
+                  )}
                 </Box>
-              )}
+              ))}
             </Box>
-          ))}
+          </Box>
+        </Box>
+
+        {/* Student Satisfaction Ranking */}
+        <Box sx={{
+          border: '1px solid',
+          borderColor: 'divider',
+          borderRadius: 1,
+          mb: 2
+        }}>
+          <Box
+            sx={{
+              p: 2,
+              bgcolor: 'grey.50',
+              borderRadius: '4px 4px 0 0',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              '&:hover': { bgcolor: 'grey.100' }
+            }}
+            onClick={() => {
+              const element = document.getElementById('ranking-content');
+              if (element) {
+                element.style.display = element.style.display === 'none' ? 'block' : 'none';
+              }
+              const arrow = document.getElementById('ranking-arrow');
+              if (arrow) {
+                arrow.style.transform = arrow.style.transform === 'rotate(180deg)' ? 'rotate(0deg)' : 'rotate(180deg)';
+              }
+            }}
+          >
+            <Typography variant="h6">
+              🏆 Ranking de Satisfacción ({assignmentResults.groups.reduce((total: number, group: any) => total + group.alumnos.length, 0)} estudiantes)
+            </Typography>
+            <Typography
+              id="ranking-arrow"
+              variant="h6"
+              sx={{
+                transition: 'transform 0.2s',
+                userSelect: 'none'
+              }}
+            >
+              ▼
+            </Typography>
+          </Box>
+          <Box
+            id="ranking-content"
+            sx={{
+              p: 2,
+              pt: 0,
+              display: 'block'
+            }}
+          >
+            <Box sx={{ maxHeight: 400, overflow: 'auto', mt: 2 }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 2fr', gap: 1, mb: 1, p: 1, bgcolor: 'grey.100', borderRadius: 0.5 }}>
+                <Typography variant="body2" fontWeight={600}>Nombre</Typography>
+                <Typography variant="body2" fontWeight={600}>Grupo</Typography>
+                <Typography variant="body2" fontWeight={600}>% Satisfacción</Typography>
+                <Typography variant="body2" fontWeight={600}>Tutores</Typography>
+              </Box>
+              {(() => {
+                // Create ranking array
+                const studentRanking: Array<{name: string, group: string, satisfaction: number, tutorResults: Array<{name: string, status: 'matched' | 'not_matched' | 'not_found'}>}> = [];
+
+                // Recreate the same tutorFullNames logic used in warnings validation (once, outside the loop)
+                const normalizeName = (name: string) => {
+                  if (!name) return '';
+                  return name.toLowerCase()
+                    .replace(/á/g, 'a')
+                    .replace(/é/g, 'e')
+                    .replace(/í/g, 'i')
+                    .replace(/ó/g, 'o')
+                    .replace(/ú/g, 'u')
+                    .replace(/ñ/g, 'n')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+                };
+
+                const calculateSimilarity = (str1: string, str2: string): number => {
+                  if (!str1 || !str2) return 0;
+                  const norm1 = normalizeName(str1);
+                  const norm2 = normalizeName(str2);
+                  if (norm1 === norm2) return 1.0;
+                  // Remove abbreviation matching to match warning system behavior
+                  return 0;
+                };
+
+                const tutorFullNames = tutoresData.map(t => ({
+                  original: `${t.Nombre} ${t.Apellido}`,
+                  normalized: normalizeName(`${t.Nombre} ${t.Apellido}`),
+                  firstName: t.Nombre,
+                  lastName: t.Apellido
+                }));
+                const validTutorNames = tutorFullNames.map(t => t.original);
+
+
+                assignmentResults.groups.forEach((group: any) => {
+                  group.alumnos.forEach((alumno: any) => {
+                    const { score, maxScore } = calculateMatchScore(alumno, group.tutores);
+                    const satisfaction = maxScore > 0 ? (score / maxScore) * 100 : 0;
+
+                    // Calculate tutor matches with status
+                    const tutorResults: Array<{name: string, status: 'matched' | 'not_matched' | 'not_found'}> = [];
+
+                    for (let i = 1; i <= 5; i++) {
+                      const tutorPref = alumno[`Tutor${i}`];
+                      if (tutorPref) {
+                        let foundInGroup = false;
+                        let existsInDatabase = false;
+                        let bestSimilarity = 0;
+
+                        // Check against all valid tutors using same logic as warnings
+                        for (const validTutor of validTutorNames) {
+                          const similarity = calculateSimilarity(tutorPref, validTutor);
+                          if (similarity > bestSimilarity) {
+                            bestSimilarity = similarity;
+                          }
+                        }
+
+                        // Use same threshold logic as warning system
+                        const threshold = 1.0 - similarityThreshold;
+                        if (bestSimilarity >= threshold) {
+                          existsInDatabase = true;
+                        }
+
+
+                        // Check if tutor is in current group
+                        for (const groupTutor of group.tutores) {
+                          const similarity = calculateSimilarity(tutorPref, groupTutor);
+                          if (similarity >= threshold) {
+                            foundInGroup = true;
+                            break;
+                          }
+                        }
+
+                        if (foundInGroup) {
+                          tutorResults.push({name: tutorPref, status: 'matched'});
+                        } else if (existsInDatabase) {
+                          tutorResults.push({name: tutorPref, status: 'not_matched'});
+                        } else {
+                          tutorResults.push({name: tutorPref, status: 'not_found'});
+                        }
+                      }
+                    }
+
+                    studentRanking.push({
+                      name: `${alumno.Nombre} ${alumno.Apellido}`,
+                      group: group.name,
+                      satisfaction: satisfaction,
+                      tutorResults: tutorResults
+                    });
+                  });
+                });
+
+                // Sort by satisfaction (best to worst)
+                studentRanking.sort((a, b) => b.satisfaction - a.satisfaction);
+
+                return studentRanking.map((student, index) => (
+                  <Box key={index} sx={{
+                    display: 'grid',
+                    gridTemplateColumns: '1.5fr 1fr 1fr 2fr',
+                    gap: 1,
+                    p: 1,
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                    '&:hover': { bgcolor: 'grey.50' }
+                  }}>
+                    <Typography variant="body2">{student.name}</Typography>
+                    <Typography variant="body2">{student.group}</Typography>
+                    <Typography variant="body2" sx={{
+                      color: student.satisfaction >= 75 ? 'success.main' :
+                             student.satisfaction >= 50 ? '#FFC107' :
+                             student.satisfaction >= 25 ? 'warning.dark' :
+                             'error.main',
+                      fontWeight: 600
+                    }}>
+                      {student.satisfaction.toFixed(1)}%
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {student.tutorResults.length > 0 ? student.tutorResults.map((tutor, tutorIndex) => (
+                        <Typography
+                          key={tutorIndex}
+                          variant="caption"
+                          sx={{
+                            px: 0.5,
+                            py: 0.25,
+                            borderRadius: 0.5,
+                            fontSize: '0.7rem',
+                            fontWeight: 500,
+                            color: 'white',
+                            bgcolor: tutor.status === 'matched' ? 'success.main' :
+                                    tutor.status === 'not_matched' ? 'warning.main' :
+                                    'error.main'
+                          }}
+                        >
+                          {tutor.name}
+                        </Typography>
+                      )) : (
+                        <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                          Sin preferencias
+                        </Typography>
+                      )}
+                    </Box>
+                  </Box>
+                ));
+              })()}
+            </Box>
+          </Box>
+        </Box>
+
+        {/* Tutor Ranking */}
+        <Box sx={{
+          border: '1px solid',
+          borderColor: 'divider',
+          borderRadius: 1,
+          mb: 2
+        }}>
+          <Box
+            sx={{
+              p: 2,
+              bgcolor: 'grey.50',
+              borderRadius: '4px 4px 0 0',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              '&:hover': { bgcolor: 'grey.100' }
+            }}
+            onClick={() => {
+              const element = document.getElementById('tutor-ranking-content');
+              if (element) {
+                element.style.display = element.style.display === 'none' ? 'block' : 'none';
+              }
+              const arrow = document.getElementById('tutor-ranking-arrow');
+              if (arrow) {
+                arrow.style.transform = arrow.style.transform === 'rotate(180deg)' ? 'rotate(0deg)' : 'rotate(180deg)';
+              }
+            }}
+          >
+            <Typography variant="h6">
+              👨‍🏫 Ranking de Tutores ({tutoresData.length} tutores)
+            </Typography>
+            <Typography
+              id="tutor-ranking-arrow"
+              variant="h6"
+              sx={{
+                transition: 'transform 0.2s',
+                userSelect: 'none'
+              }}
+            >
+              ▼
+            </Typography>
+          </Box>
+          <Box
+            id="tutor-ranking-content"
+            sx={{
+              p: 2,
+              pt: 0,
+              display: 'block'
+            }}
+          >
+            <Box sx={{ maxHeight: 400, overflow: 'auto', mt: 2 }}>
+              <Box sx={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 1, mb: 1, p: 1, bgcolor: 'grey.100', borderRadius: 0.5 }}>
+                <Typography variant="body2" fontWeight={600}>Tutor</Typography>
+                <Typography variant="body2" fontWeight={600}>Selecciones</Typography>
+                <Typography variant="body2" fontWeight={600}>Asignados</Typography>
+                <Typography variant="body2" fontWeight={600}>% Efectividad</Typography>
+              </Box>
+              {(() => {
+                // Create tutor ranking data
+                const tutorStats: Array<{name: string, selected: number, matched: number, effectiveness: number}> = [];
+
+                // Normalize function for name matching
+                const normalizeName = (name: string) => {
+                  if (!name) return '';
+                  return name.toLowerCase()
+                    .replace(/á/g, 'a')
+                    .replace(/é/g, 'e')
+                    .replace(/í/g, 'i')
+                    .replace(/ó/g, 'o')
+                    .replace(/ú/g, 'u')
+                    .replace(/ñ/g, 'n')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+                };
+
+                // Count selections and matches for each tutor
+                const validTutorNames = tutoresData.map(t => `${t.Nombre} ${t.Apellido}`);
+
+                validTutorNames.forEach(tutorName => {
+                  let selectedCount = 0;
+                  let matchedCount = 0;
+
+                  assignmentResults.groups.forEach((group: any) => {
+                    group.alumnos.forEach((alumno: any) => {
+                      for (let i = 1; i <= 5; i++) {
+                        const tutorPref = alumno[`Tutor${i}`];
+                        if (tutorPref) {
+                          // Check if this preference matches current tutor (exact match after normalization)
+                          const norm1 = normalizeName(tutorPref);
+                          const norm2 = normalizeName(tutorName);
+
+                          if (norm1 === norm2) {
+                            selectedCount++;
+
+                            // Check if student actually got this tutor in their group
+                            const foundInGroup = group.tutores.some((groupTutor: string) => {
+                              const normGroupTutor = normalizeName(groupTutor);
+                              return normGroupTutor === norm2;
+                            });
+
+                            if (foundInGroup) {
+                              matchedCount++;
+                            }
+                          }
+                        }
+                      }
+                    });
+                  });
+
+                  const effectiveness = selectedCount > 0 ? (matchedCount / selectedCount) * 100 : 0;
+
+                  tutorStats.push({
+                    name: tutorName,
+                    selected: selectedCount,
+                    matched: matchedCount,
+                    effectiveness: effectiveness
+                  });
+                });
+
+                // Sort by selection count (most popular first), then by effectiveness
+                tutorStats.sort((a, b) => {
+                  if (a.selected !== b.selected) {
+                    return b.selected - a.selected;
+                  }
+                  return b.effectiveness - a.effectiveness;
+                });
+
+                return tutorStats.map((tutor, index) => (
+                  <Box key={index} sx={{
+                    display: 'grid',
+                    gridTemplateColumns: '2fr 1fr 1fr 1fr',
+                    gap: 1,
+                    p: 1,
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                    '&:hover': { bgcolor: 'grey.50' }
+                  }}>
+                    <Typography variant="body2">{tutor.name}</Typography>
+                    <Typography variant="body2" textAlign="center">{tutor.selected}</Typography>
+                    <Typography variant="body2" textAlign="center" sx={{
+                      color: tutor.matched > 0 ? 'success.main' : 'text.secondary'
+                    }}>
+                      {tutor.matched}
+                    </Typography>
+                    <Typography variant="body2" textAlign="center" sx={{
+                      color: tutor.effectiveness >= 80 ? 'success.main' :
+                             tutor.effectiveness >= 50 ? 'warning.main' :
+                             tutor.effectiveness > 0 ? 'error.main' :
+                             'text.secondary',
+                      fontWeight: tutor.effectiveness > 0 ? 600 : 400
+                    }}>
+                      {tutor.selected > 0 ? `${tutor.effectiveness.toFixed(0)}%` : '-'}
+                    </Typography>
+                  </Box>
+                ));
+              })()}
+            </Box>
+          </Box>
         </Box>
       </Box>
     </Box>;
   }
 
   const Analisis = () => {
-    return <Box sx={{ p: 3 }}>
-      <h2>Análisis de Datos</h2>
-      <Typography>
-        Aquí se mostrarán análisis y visualizaciones basadas en los datos cargados.
+    if (!assignmentResults || !assignmentResults.groups) {
+      return <Box sx={{ p: 3 }}>
+        <Typography variant="h5" fontWeight={600} sx={{ mb: 2 }}>
+          Análisis de Resultados
+        </Typography>
+        <Typography variant="body1" color="text.secondary">
+          Ejecuta la asignación de grupos para ver el análisis detallado de los resultados.
+        </Typography>
+      </Box>;
+    }
+
+    // Calculate detailed analytics
+    const groups = assignmentResults.groups;
+
+    // Helper function to calculate match score for a student
+    const calculateMatchScore = (alumno: any, groupTutors: string[]) => {
+      let score = 0;
+      let maxScore = 0;
+      // Normalize function
+      const normalizeName = (name: string) => {
+        if (!name) return '';
+        return name.toLowerCase()
+          .replace(/á/g, 'a')
+          .replace(/é/g, 'e')
+          .replace(/í/g, 'i')
+          .replace(/ó/g, 'o')
+          .replace(/ú/g, 'u')
+          .replace(/ñ/g, 'n')
+          .replace(/\s+/g, ' ')
+          .trim();
+      };
+      // Calculate similarity between two strings - strict matching only (like warning system)
+      const calculateSimilarity = (str1: string, str2: string): number => {
+        if (!str1 || !str2) return 0;
+        const norm1 = normalizeName(str1);
+        const norm2 = normalizeName(str2);
+        if (norm1 === norm2) return 1.0;
+        // Remove abbreviation matching to be consistent with warning system
+        return 0;
+      };
+      // Check each tutor preference
+      for (let i = 1; i <= 5; i++) {
+        const tutorPref = alumno[`Tutor${i}`];
+        if (tutorPref) {
+          const weight = pesoRelativoTutores[i - 1] || 0;
+          maxScore += weight;
+          // Check if this tutor is in the group
+          for (const groupTutor of groupTutors) {
+            const similarity = calculateSimilarity(tutorPref, groupTutor);
+            if (similarity >= (1.0 - similarityThreshold)) {
+              score += weight;
+              break;
+            }
+          }
+        }
+      }
+      return { score, maxScore };
+    };
+
+    // Group size distribution
+    const groupSizes = groups.map((g: any) => g.alumnos.length);
+    const minGroupSize = Math.min(...groupSizes);
+    const maxGroupSize = Math.max(...groupSizes);
+    const avgGroupSize = groupSizes.reduce((a: number, b: number) => a + b, 0) / groupSizes.length;
+
+    // Tutor distribution
+    const tutorCounts = groups.map((g: any) => g.tutores.length);
+    const minTutors = Math.min(...tutorCounts);
+    const maxTutors = Math.max(...tutorCounts);
+    const avgTutors = tutorCounts.reduce((a: number, b: number) => a + b, 0) / tutorCounts.length;
+
+    // Student satisfaction analysis
+    const studentAnalysis = groups.flatMap((group: any) =>
+      group.alumnos.map((alumno: any) => {
+        const { score, maxScore } = calculateMatchScore(alumno, group.tutores);
+        const satisfaction = maxScore > 0 ? (score / maxScore) * 100 : 0;
+        return {
+          name: `${alumno.Nombre} ${alumno.Apellido}`,
+          puntaje: parseFloat(alumno.Puntaje) || 0,
+          satisfaction,
+          score,
+          maxScore,
+          group: group.name
+        };
+      })
+    );
+
+    const avgSatisfaction = studentAnalysis.reduce((sum: number, s: any) => sum + s.satisfaction, 0) / studentAnalysis.length;
+
+    // Satisfaction categories
+    const excellentSatisfaction = studentAnalysis.filter((s: any) => s.satisfaction >= 75).length;
+    const goodSatisfaction = studentAnalysis.filter((s: any) => s.satisfaction >= 50 && s.satisfaction < 75).length;
+    const fairSatisfaction = studentAnalysis.filter((s: any) => s.satisfaction >= 25 && s.satisfaction < 50).length;
+    const poorSatisfaction = studentAnalysis.filter((s: any) => s.satisfaction < 25).length;
+
+    // Top and bottom performers
+    const topPerformers = [...studentAnalysis].sort((a, b) => b.puntaje - a.puntaje).slice(0, 5);
+    const mostSatisfied = [...studentAnalysis].sort((a, b) => b.satisfaction - a.satisfaction).slice(0, 5);
+    const leastSatisfied = [...studentAnalysis].sort((a, b) => a.satisfaction - b.satisfaction).slice(0, 5);
+
+    // Algorithm efficiency
+    const efficiency = ((assignmentResults.totalScore / assignmentResults.perfectScore) * 100);
+
+    return <Box sx={{ p: 3, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'auto' }}>
+      <Typography variant="h5" fontWeight={600} sx={{ mb: 3 }}>
+        Análisis de Resultados
       </Typography>
+
+      {/* Algorithm Performance */}
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>📊 Rendimiento del Algoritmo</Typography>
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 2, mb: 2 }}>
+          <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+            <Typography variant="caption" color="text.secondary">Eficiencia General</Typography>
+            <Typography variant="h5" color={efficiency >= 70 ? 'success.main' : efficiency >= 50 ? 'warning.main' : 'error.main'}>
+              {efficiency.toFixed(1)}%
+            </Typography>
+          </Box>
+          <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+            <Typography variant="caption" color="text.secondary">Configuración Óptima</Typography>
+            <Typography variant="h5">{assignmentResults.selectedGroupCount} grupos</Typography>
+          </Box>
+          <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+            <Typography variant="caption" color="text.secondary">Satisfacción Promedio</Typography>
+            <Typography variant="h5" color={avgSatisfaction >= 70 ? 'success.main' : avgSatisfaction >= 50 ? 'warning.main' : 'error.main'}>
+              {avgSatisfaction.toFixed(1)}%
+            </Typography>
+          </Box>
+        </Box>
+      </Box>
+
+      {/* Group Distribution */}
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>👥 Distribución de Grupos</Typography>
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 2, mb: 2 }}>
+          <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+            <Typography variant="caption" color="text.secondary">Alumnos por Grupo</Typography>
+            <Typography variant="body1">{minGroupSize} - {maxGroupSize} (avg: {avgGroupSize.toFixed(1)})</Typography>
+          </Box>
+          <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+            <Typography variant="caption" color="text.secondary">Tutores por Grupo</Typography>
+            <Typography variant="body1">{minTutors} - {maxTutors} (avg: {avgTutors.toFixed(1)})</Typography>
+          </Box>
+        </Box>
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 1, mb: 3 }}>
+          {groups.map((group: any, index: number) => (
+            <Box key={index} sx={{ p: 1, bgcolor: 'grey.100', borderRadius: 0.5, textAlign: 'center' }}>
+              <Typography variant="caption">{group.name}</Typography>
+              <Typography variant="body2" fontWeight={600}>
+                {group.alumnos.length} estudiantes
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                {group.tutores.length} tutores
+              </Typography>
+            </Box>
+          ))}
+        </Box>
+
+        {/* Group Size Visualization */}
+        <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+          <Typography variant="subtitle2" sx={{ mb: 2 }}>Tamaño de Grupos (Estudiantes)</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'end', height: 100, gap: 1 }}>
+            {groups.map((group: any, index: number) => {
+              const height = maxGroupSize > 0 ? (group.alumnos.length / maxGroupSize) * 70 : 0;
+              return (
+                <Box key={index} sx={{ flex: 1, textAlign: 'center' }}>
+                  <Box
+                    sx={{
+                      height: `${height}px`,
+                      bgcolor: `rgb(${main.r}, ${main.g}, ${main.b})`,
+                      mb: 1,
+                      borderRadius: '4px 4px 0 0',
+                      display: 'flex',
+                      alignItems: 'end',
+                      justifyContent: 'center',
+                      color: 'white',
+                      fontWeight: 'bold',
+                      fontSize: '12px'
+                    }}
+                  >
+                    {group.alumnos.length}
+                  </Box>
+                  <Typography variant="caption" sx={{ fontSize: '10px' }}>
+                    {group.name}
+                  </Typography>
+                </Box>
+              );
+            })}
+          </Box>
+        </Box>
+      </Box>
+
+      {/* Student Satisfaction */}
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>😊 Satisfacción de Estudiantes</Typography>
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 2, mb: 3 }}>
+          <Box sx={{ p: 2, bgcolor: 'success.light', borderRadius: 1, textAlign: 'center' }}>
+            <Typography variant="h4" color="success.dark">{excellentSatisfaction}</Typography>
+            <Typography variant="caption">Excelente (≥75%)</Typography>
+          </Box>
+          <Box sx={{ p: 2, bgcolor: '#FFC10740', borderRadius: 1, textAlign: 'center' }}>
+            <Typography variant="h4" color="warning.dark">{goodSatisfaction}</Typography>
+            <Typography variant="caption">Buena (50-74%)</Typography>
+          </Box>
+          <Box sx={{ p: 2, bgcolor: 'warning.light', borderRadius: 1, textAlign: 'center' }}>
+            <Typography variant="h4" color="warning.dark">{fairSatisfaction}</Typography>
+            <Typography variant="caption">Regular (25-49%)</Typography>
+          </Box>
+          <Box sx={{ p: 2, bgcolor: 'error.light', borderRadius: 1, textAlign: 'center' }}>
+            <Typography variant="h4" color="error.dark">{poorSatisfaction}</Typography>
+            <Typography variant="caption">Pobre (&lt;25%)</Typography>
+          </Box>
+        </Box>
+
+        {/* Satisfaction Distribution Chart */}
+        <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+          <Typography variant="subtitle2" sx={{ mb: 2 }}>Distribución de Satisfacción</Typography>
+          <Box sx={{ display: 'flex', alignItems: 'end', height: 120, gap: 1 }}>
+            {[
+              { value: excellentSatisfaction, color: '#4caf50', label: 'Excelente' },
+              { value: goodSatisfaction, color: '#ff9800', label: 'Buena' },
+              { value: fairSatisfaction, color: '#ff9800', label: 'Regular' },
+              { value: poorSatisfaction, color: '#f44336', label: 'Pobre' }
+            ].map((item, index) => {
+              const maxValue = Math.max(excellentSatisfaction, goodSatisfaction, fairSatisfaction, poorSatisfaction);
+              const height = maxValue > 0 ? (item.value / maxValue) * 80 : 0;
+              return (
+                <Box key={index} sx={{ flex: 1, textAlign: 'center' }}>
+                  <Box
+                    sx={{
+                      height: `${height}px`,
+                      bgcolor: item.color,
+                      mb: 1,
+                      borderRadius: '4px 4px 0 0',
+                      display: 'flex',
+                      alignItems: 'end',
+                      justifyContent: 'center',
+                      color: 'white',
+                      fontWeight: 'bold',
+                      fontSize: '12px'
+                    }}
+                  >
+                    {item.value > 0 && item.value}
+                  </Box>
+                  <Typography variant="caption" sx={{ fontSize: '10px' }}>
+                    {item.label}
+                  </Typography>
+                </Box>
+              );
+            })}
+          </Box>
+        </Box>
+      </Box>
+
+      {/* Top Performers */}
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>🏆 Estudiantes Destacados</Typography>
+        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 3 }}>
+          <Box>
+            <Typography variant="subtitle1" sx={{ mb: 1 }}>Mayor Puntaje Académico</Typography>
+            {topPerformers.map((student, index) => (
+              <Box key={index} sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5, borderBottom: '1px solid', borderColor: 'divider' }}>
+                <Typography variant="body2">{student.name}</Typography>
+                <Typography variant="body2" fontWeight={600}>{student.puntaje}</Typography>
+              </Box>
+            ))}
+          </Box>
+          <Box>
+            <Typography variant="subtitle1" sx={{ mb: 1 }}>Mayor Satisfacción con Tutores</Typography>
+            {mostSatisfied.map((student, index) => (
+              <Box key={index} sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5, borderBottom: '1px solid', borderColor: 'divider' }}>
+                <Typography variant="body2">{student.name}</Typography>
+                <Typography variant="body2" fontWeight={600} color="success.main">
+                  {student.satisfaction.toFixed(1)}%
+                </Typography>
+              </Box>
+            ))}
+          </Box>
+        </Box>
+      </Box>
+
+      {/* Areas for Improvement */}
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>⚠️ Áreas de Mejora</Typography>
+        <Box>
+          <Typography variant="subtitle1" sx={{ mb: 1 }}>Estudiantes con Menor Satisfacción</Typography>
+          {leastSatisfied.map((student, index) => (
+            <Box key={index} sx={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              py: 1,
+              px: 2,
+              mb: 1,
+              bgcolor: student.satisfaction < 25 ? 'error.light' : 'warning.light',
+              borderRadius: 1
+            }}>
+              <Box>
+                <Typography variant="body2">{student.name}</Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Grupo: {student.group} | Puntaje: {student.puntaje}
+                </Typography>
+              </Box>
+              <Box sx={{ textAlign: 'right' }}>
+                <Typography variant="body2" fontWeight={600}>
+                  {student.satisfaction.toFixed(1)}%
+                </Typography>
+                <Typography variant="caption">
+                  {student.score}/{student.maxScore}
+                </Typography>
+              </Box>
+            </Box>
+          ))}
+        </Box>
+      </Box>
+
+      {/* Statistical Insights */}
+      <Box sx={{ mb: 4 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>📈 Análisis Estadístico</Typography>
+        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 3 }}>
+          <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+            <Typography variant="subtitle1" sx={{ mb: 2 }}>Correlación Puntaje - Satisfacción</Typography>
+            {(() => {
+              // Calculate correlation between academic score and satisfaction
+              const validStudents = studentAnalysis.filter((s: any) => s.puntaje > 0);
+              if (validStudents.length < 2) return <Typography variant="body2">Datos insuficientes</Typography>;
+
+              const meanPuntaje = validStudents.reduce((sum: number, s: any) => sum + s.puntaje, 0) / validStudents.length;
+              const meanSatisfaction = validStudents.reduce((sum: number, s: any) => sum + s.satisfaction, 0) / validStudents.length;
+
+              const numerator = validStudents.reduce((sum: number, s: any) =>
+                sum + (s.puntaje - meanPuntaje) * (s.satisfaction - meanSatisfaction), 0);
+              const denominator = Math.sqrt(
+                validStudents.reduce((sum: number, s: any) => sum + Math.pow(s.puntaje - meanPuntaje, 2), 0) *
+                validStudents.reduce((sum: number, s: any) => sum + Math.pow(s.satisfaction - meanSatisfaction, 2), 0)
+              );
+
+              const correlation = denominator !== 0 ? numerator / denominator : 0;
+
+              return (
+                <Box>
+                  <Typography variant="h4" color={Math.abs(correlation) > 0.5 ? 'success.main' : Math.abs(correlation) > 0.3 ? 'warning.main' : 'text.secondary'}>
+                    {correlation.toFixed(3)}
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    {Math.abs(correlation) > 0.5 ? 'Correlación fuerte' : Math.abs(correlation) > 0.3 ? 'Correlación moderada' : 'Correlación débil'}
+                  </Typography>
+                  <Typography variant="body2" sx={{ mt: 1, fontSize: '0.75rem' }}>
+                    {correlation > 0 ? 'Los estudiantes con mejor puntaje tienden a estar más satisfechos' :
+                     correlation < -0.2 ? 'Los estudiantes con mejor puntaje tienden a estar menos satisfechos' :
+                     'No hay relación clara entre puntaje y satisfacción'}
+                  </Typography>
+                </Box>
+              );
+            })()}
+          </Box>
+
+          <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+            <Typography variant="subtitle1" sx={{ mb: 2 }}>Desviación Estándar</Typography>
+            <Box sx={{ mb: 2 }}>
+              <Typography variant="caption" color="text.secondary">Satisfacción</Typography>
+              <Typography variant="h5">
+                {(() => {
+                  const mean = avgSatisfaction;
+                  const variance = studentAnalysis.reduce((sum: number, s: any) => sum + Math.pow(s.satisfaction - mean, 2), 0) / studentAnalysis.length;
+                  return Math.sqrt(variance).toFixed(1);
+                })()}%
+              </Typography>
+            </Box>
+            <Box>
+              <Typography variant="caption" color="text.secondary">Tamaño de Grupos</Typography>
+              <Typography variant="h5">
+                {(() => {
+                  const variance = groupSizes.reduce((sum: number, size: number) => sum + Math.pow(size - avgGroupSize, 2), 0) / groupSizes.length;
+                  return Math.sqrt(variance).toFixed(1);
+                })()}
+              </Typography>
+            </Box>
+          </Box>
+        </Box>
+
+        {/* Distribution Analysis */}
+        <Box sx={{ mt: 3, p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
+          <Typography variant="subtitle1" sx={{ mb: 2 }}>Distribución de Puntajes Académicos</Typography>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
+            <Box sx={{ textAlign: 'center' }}>
+              <Typography variant="caption" color="text.secondary">Mínimo</Typography>
+              <Typography variant="h6">{Math.min(...studentAnalysis.map((s: any) => s.puntaje)).toFixed(1)}</Typography>
+            </Box>
+            <Box sx={{ textAlign: 'center' }}>
+              <Typography variant="caption" color="text.secondary">Mediana</Typography>
+              <Typography variant="h6">
+                {(() => {
+                  const sorted = [...studentAnalysis].sort((a: any, b: any) => a.puntaje - b.puntaje);
+                  const mid = Math.floor(sorted.length / 2);
+                  return sorted.length % 2 === 0 ?
+                    ((sorted[mid - 1].puntaje + sorted[mid].puntaje) / 2).toFixed(1) :
+                    sorted[mid].puntaje.toFixed(1);
+                })()}
+              </Typography>
+            </Box>
+            <Box sx={{ textAlign: 'center' }}>
+              <Typography variant="caption" color="text.secondary">Promedio</Typography>
+              <Typography variant="h6">
+                {(studentAnalysis.reduce((sum: number, s: any) => sum + s.puntaje, 0) / studentAnalysis.length).toFixed(1)}
+              </Typography>
+            </Box>
+            <Box sx={{ textAlign: 'center' }}>
+              <Typography variant="caption" color="text.secondary">Máximo</Typography>
+              <Typography variant="h6">{Math.max(...studentAnalysis.map((s: any) => s.puntaje)).toFixed(1)}</Typography>
+            </Box>
+          </Box>
+        </Box>
+      </Box>
+
+      {/* Recommendations */}
+      <Box sx={{ p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
+        <Typography variant="h6" sx={{ mb: 1 }}>💡 Recomendaciones</Typography>
+        <Box component="ul" sx={{ pl: 2, m: 0 }}>
+          {efficiency < 50 && (
+            <Typography component="li" variant="body2" sx={{ mb: 0.5 }}>
+              La eficiencia es baja ({efficiency.toFixed(1)}%). Considera ajustar los parámetros o revisar la calidad de los datos.
+            </Typography>
+          )}
+          {assignmentResults.statistics.unassigned > 0 && (
+            <Typography component="li" variant="body2" sx={{ mb: 0.5 }}>
+              Hay {assignmentResults.statistics.unassigned} estudiantes sin asignar. Aumenta la capacidad por grupo o el número de grupos.
+            </Typography>
+          )}
+          {poorSatisfaction > studentAnalysis.length * 0.2 && (
+            <Typography component="li" variant="body2" sx={{ mb: 0.5 }}>
+              Más del 20% de estudiantes tienen baja satisfacción. Revisa las preferencias de tutores o ajusta la sensibilidad de coincidencia.
+            </Typography>
+          )}
+          {maxGroupSize - minGroupSize > 3 && (
+            <Typography component="li" variant="body2" sx={{ mb: 0.5 }}>
+              Los grupos tienen tamaños muy desiguales. Considera ajustar los parámetros para mayor balance.
+            </Typography>
+          )}
+          {(() => {
+            const groupSizeVariance = groupSizes.reduce((sum: number, size: number) => sum + Math.pow(size - avgGroupSize, 2), 0) / groupSizes.length;
+            const groupSizeStdDev = Math.sqrt(groupSizeVariance);
+            return groupSizeStdDev > 2;
+          })() && (
+            <Typography component="li" variant="body2" sx={{ mb: 0.5 }}>
+              Alta variabilidad en tamaños de grupos. Considera ajustar la distribución para mayor uniformidad.
+            </Typography>
+          )}
+          {avgSatisfaction < 60 && avgSatisfaction > 0 && (
+            <Typography component="li" variant="body2" sx={{ mb: 0.5 }}>
+              La satisfacción promedio es baja ({avgSatisfaction.toFixed(1)}%). Revisa si los estudiantes están especificando tutores válidos.
+            </Typography>
+          )}
+        </Box>
+      </Box>
     </Box>;
   }
 

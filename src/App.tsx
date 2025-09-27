@@ -56,7 +56,6 @@ const Maraton = () => {
   const [similarityThreshold, setSimilarityThreshold] = useState(0.8);
 
   // Results state
-  const [groups, setGroups] = useState<any[]>([]);
   const [assignmentResults, setAssignmentResults] = useState<any>(null);
 
   const requiredAlumnosColumns = [
@@ -381,7 +380,6 @@ const Maraton = () => {
     }
 
     if (bestConfiguration) {
-      setGroups(bestConfiguration.groups);
       setAssignmentResults({
         ...bestConfiguration,
         timestamp: new Date().toISOString(),

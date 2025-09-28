@@ -1,6 +1,6 @@
 Fecha,Nombre,Apellido,Email,Rubro,Emprendimiento,Descripción,Puntaje,Tutor1,Tutor2,Tutor3,Tutor4,Tutor5
-2024-01-15,Juan,Pérez,juan.perez@ejemplo.com,Tecnología,TechSolutions,Desarrollo de aplicaciones móviles,8.5,Chespirito,Laura Sanchez,Pedro Ramirez,,
-2024-02-10,María,García,maria.garcia@ejemplo.com,Salud,MediCare Plus,Consultoría en telemedicina,9.2,Carmen Torres,Miguel Flores,Ana Morales,Carlos Vargas,
+2024-01-15,Juan,Pérez,juan.perez@ejemplo.com,Tecnología,TechSolutions,Desarrollo de aplicaciones móviles,8.5,Chespirito,Laura Sanchez,Pedrito Ramirez,,
+2024-02-10,María,García,maria.garcia@ejemplo.com,Salud,MediCare Plus,Consultoría en telemedicina,9.2,Carmen Torres,Miguel Flores,Ana Moráles,Carlos Vargas,
 2024-01-22,Carlos,López,carlos.lopez@ejemplo.com,Legal,LegalTech,Automatización de procesos legales,7.8,Sofía Castro,Diego Mendoza,Lucía Jiménez,,
 2024-03-05,Ana,Martínez,ana.martinez@ejemplo.com,Construcción,EcoArq,Diseño arquitectónico sostenible,8.9,R. Hernández,Carmen Torres,Sofia Castro,Miguel Flores,P. Ramírez
 2024-02-28,Luis,Rodríguez,luis.rodriguez@ejemplo.com,Tecnología,InnovateTech,Soluciones de IoT para industria,8.1,L. Sánchez,Ana Morales,D. Mendoza,Lucia Jimenez,
@@ -9,9 +9,9 @@ Fecha,Nombre,Apellido,Email,Rubro,Emprendimiento,Descripción,Puntaje,Tutor1,Tut
 2024-03-12,Valentina,Silva,valentina.silva@ejemplo.com,Agricultura,AgroTech,Sistema de riego inteligente,8.7,Diego Mendoza,Lucia Jiménez,Sofia Castro,,
 2024-01-25,Andrés,Moreno,andres.moreno@ejemplo.com,Logística,LogiSmart,Optimización de rutas de entrega,8.3,Laura Sanchez,Carmen Torres,Miguel Flores,Roberto Hernandez,
 2024-02-08,Isabella,Herrera,isabella.herrera@ejemplo.com,Turismo,TravelConnect,Marketplace de experiencias turísticas,8.8,Ana Morales,Carlos Vargas,D. Mendoza,,
-2024-03-18,Sebastián,Ruiz,sebastian.ruiz@ejemplo.com,Retail,RetailAI,Análisis predictivo para retail,7.9,Pedro Ramirez,Sofia Castro,Laura Sánchez,Lucia Jiménez,
+2024-03-18,Sebastián,Ruiz,sebastian.ruiz@ejemplo.com,Retail,RetailAI,Análisis predictivo para retail,7.9,Pedro Ramirez,Sofia Castro,Laura Sanches,Lucia Jiménez,
 2024-01-30,Camila,Torres,camila.torres@ejemplo.com,Salud,HealthTrack,Monitoreo de signos vitales IoT,9.1,Roberto Hernández,Miguel Flores,Ana Morales,,
-2024-02-20,Mateo,Vargas,mateo.vargas@ejemplo.com,Energía,GreenEnergy,Paneles solares inteligentes,8.4,Carmen Torres,Diego Mendoza,Carlos Vargas,Pedro Ramírez,
+2024-02-20,Mateo,Vargas,mateo.vargas@ejemplo.com,Energía,GreenEnergy,Paneles solares inteligentes,8.4,Carmen T.,Diego Mendoza,Carlos Vargas,Pedro Ramírez,
 2024-03-08,Luciana,Mendoza,luciana.mendoza@ejemplo.com,Alimentación,FoodTech,App de delivery sostenible,8.6,Sofía Castro,L. Sánchez,Roberto Hernandez,,
 2024-01-12,Gabriel,Castro,gabriel.castro@ejemplo.com,Deportes,SportAnalytics,Análisis de rendimiento deportivo,7.7,Ana Morales,Miguel Flores,Carmen Torres,Diego Mendoza,
 2024-02-25,Victoria,Jiménez,victoria.jimenez@ejemplo.com,Moda,FashionTech,Probador virtual con IA,8.2,Carlos Vargas,Lucia Jimenez,Pedro Ramírez,,

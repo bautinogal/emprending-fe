@@ -1,10 +1,13 @@
 import { useState, useEffect, type SyntheticEvent } from 'react'
+import { useSelector, useDispatch } from 'react-redux'
 import './App.css'
 
 import * as React from 'react';
 import { Box, Button, Divider, Drawer, IconButton, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Tab, Tabs, Typography } from '@mui/material';
 import { ChevronLeft as ChevronLeftIcon, Download as DownloadIcon, Groups as GroupsIcon, Menu as MenuIcon, School as SchoolIcon, UploadFile as UploadFileIcon } from '@mui/icons-material';
 import { DataGrid, type GridColDef } from '@mui/x-data-grid';
+import { RootState, AppDispatch } from './store/store';
+import { setParameters, optimizeGroups } from './store/appSlice';
 
 const CustomTabPanel = (props: { children?: React.ReactNode; index: string; value: string; }) => {
   const { children, value, index, ...other } = props;
@@ -38,61 +41,66 @@ const Tutorias = () => {
 };
 
 const Parametros = ({ canRecalculate, tutoresData, alumnosData }: any) => {
+  const dispatch = useDispatch<AppDispatch>();
+  const parameters = useSelector((state: RootState) => state.app.parameters);
+
+  const {
+    seed,
+    geneticIterations,
+    populationSize,
+    mutationRate,
+    crossoverRate,
+    tournamentSize,
+    elitismCount,
+    minCantidadGrupos,
+    maxCantidadGrupos,
+    maximosAlumnosPorGrupo,
+    similarityThreshold,
+    pesoRelativoTutores
+  } = parameters;
 
   const onRecalculate = () => {
     console.log('Handle Recalculate triggered');
-    console.log({
-      dataStatus: {
-        alumnosData,
-        tutoresData
-      },
-      assignmentParams: {
-        minCantidadGrupos,
-        maxCantidadGrupos,
-        maximosAlumnosPorGrupo,
-        similarityThreshold,
-        pesoRelativoTutores
-      },
-      geneticParams: {
-        seed,
-        geneticIterations,
-        populationSize,
-        mutationRate,
-        crossoverRate,
-        tournamentSize,
-        elitismCount,
-        complexityTotal: populationSize * geneticIterations
-      }
-    });
 
+    dispatch(optimizeGroups({
+      alumnosData: alumnosData.map((a: any) => ({
+        nombre: a.Nombre || a.nombre,
+        apellido: a.Apellido || a.apellido,
+        email: a.Email || a.email,
+        value: a.Puntaje || a.puntaje,
+        tutores: Object.entries(a).filter((x: [string, any]) => x[0].toLowerCase().includes("tutor") && x[1] != "").map((x: [string, any]) => x[1])
+      })) as any[],
+      tutoresData: tutoresData.map((a: any) => ({
+        nombre: a.Nombre || a.nombre,
+        apellido: a.Apellido || a.apellido,
+      })) as any[],
+      parameters: {
+        seed: 42,
+        geneticIterations: 5, // 5 - 100
+        populationSize: 50, // < 2^n
+        mutationRate: 0.1, // 0.05-0.2 typical (10% chance)
+        crossoverRate: 0.5, // 0.6-0.9 typical (70% chance)
+        tournamentSize: 5, // < n / 2 //  2-3 for exploration, 4-5 for exploitation
+        elitismCount: 2, // 0 - 1 // 2-5% of population size
+
+        // Assignment parameters
+        minCantidadGrupos: 1,
+        maxCantidadGrupos: 10,
+        maximosAlumnosPorGrupo: 30,
+        similarityThreshold: 0.5,
+        pesoRelativoTutores: [8, 5, 3, 2, 1]
+      }
+    } as any));
     if (alumnosData.length === 0 || tutoresData.length === 0) {
       alert('Por favor, carga los archivos CSV de tutores y alumnos antes de recalcular.');
       return;
     }
   }
 
-  // Genetic Algorithm parameters
-  const [seed, setSeed] = useState(42);
-  const [geneticIterations, setGeneticIterations] = useState(100);
-  const [populationSize, setPopulationSize] = useState(50);
-  const [mutationRate, setMutationRate] = useState(0.1);
-  const [crossoverRate, setCrossoverRate] = useState(0.7);
-  const [tournamentSize, setTournamentSize] = useState(3);
-  const [elitismCount, setElitismCount] = useState(2);
-
-  // Parameters state
-  const [minCantidadGrupos, setMinCantidadGrupos] = useState(3);
-  const [maxCantidadGrupos, setMaxCantidadGrupos] = useState(7);
-  const [maximosAlumnosPorGrupo, setMaximosAlumnosPorGrupo] = useState(10);
-  const [pesoRelativoTutores, setPesoRelativoTutores] = useState([10, 5, 3, 2, 1]);
-  const [similarityThreshold, setSimilarityThreshold] = useState(0.8);
-
   const handlePesoChange = (index: number, value: string) => {
-    setPesoRelativoTutores((prev: number[]) => {
-      const newPesos = [...prev];
-      newPesos[index] = Number(value);
-      return newPesos;
-    });
+    const newPesos = [...pesoRelativoTutores];
+    newPesos[index] = Number(value);
+    dispatch(setParameters({ pesoRelativoTutores: newPesos }));
   };
 
   return <Box sx={{ p: 3, overflowY: 'auto', height: '100%' }}>
@@ -117,7 +125,7 @@ const Parametros = ({ canRecalculate, tutoresData, alumnosData }: any) => {
         <input
           type="number"
           value={minCantidadGrupos}
-          onChange={(e) => setMinCantidadGrupos(Number(e.target.value))}
+          onChange={(e) => dispatch(setParameters({ minCantidadGrupos: Number(e.target.value) }))}
           min="1"
           style={{
             padding: '8px 12px',
@@ -135,7 +143,7 @@ const Parametros = ({ canRecalculate, tutoresData, alumnosData }: any) => {
         <input
           type="number"
           value={maxCantidadGrupos}
-          onChange={(e) => setMaxCantidadGrupos(Number(e.target.value))}
+          onChange={(e) => dispatch(setParameters({ maxCantidadGrupos: Number(e.target.value) }))}
           min={minCantidadGrupos}
           style={{
             padding: '8px 12px',
@@ -159,7 +167,7 @@ const Parametros = ({ canRecalculate, tutoresData, alumnosData }: any) => {
         <input
           type="number"
           value={maximosAlumnosPorGrupo}
-          onChange={(e) => setMaximosAlumnosPorGrupo(Number(e.target.value))}
+          onChange={(e) => dispatch(setParameters({ maximosAlumnosPorGrupo: Number(e.target.value) }))}
           style={{
             padding: '8px 12px',
             border: '1px solid #ccc',
@@ -206,7 +214,7 @@ const Parametros = ({ canRecalculate, tutoresData, alumnosData }: any) => {
             min="0"
             max="100"
             value={similarityThreshold * 100}
-            onChange={(e) => setSimilarityThreshold(Number(e.target.value) / 100)}
+            onChange={(e) => dispatch(setParameters({ similarityThreshold: Number(e.target.value) / 100 }))}
             style={{
               width: '300px',
               cursor: 'pointer'
@@ -234,7 +242,7 @@ const Parametros = ({ canRecalculate, tutoresData, alumnosData }: any) => {
           <input
             type="number"
             value={seed}
-            onChange={(e) => setSeed(Number(e.target.value))}
+            onChange={(e) => dispatch(setParameters({ seed: Number(e.target.value) }))}
             style={{
               padding: '8px 12px',
               border: '1px solid #ccc',
@@ -257,7 +265,7 @@ const Parametros = ({ canRecalculate, tutoresData, alumnosData }: any) => {
             min="10"
             max="500"
             value={geneticIterations}
-            onChange={(e) => setGeneticIterations(Number(e.target.value))}
+            onChange={(e) => dispatch(setParameters({ geneticIterations: Number(e.target.value) }))}
             style={{ width: '200px', cursor: 'pointer' }}
           />
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
@@ -274,7 +282,7 @@ const Parametros = ({ canRecalculate, tutoresData, alumnosData }: any) => {
             min="10"
             max="200"
             value={populationSize}
-            onChange={(e) => setPopulationSize(Number(e.target.value))}
+            onChange={(e) => dispatch(setParameters({ populationSize: Number(e.target.value) }))}
             style={{ width: '200px', cursor: 'pointer' }}
           />
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
@@ -291,7 +299,7 @@ const Parametros = ({ canRecalculate, tutoresData, alumnosData }: any) => {
             min="1"
             max="30"
             value={mutationRate * 100}
-            onChange={(e) => setMutationRate(Number(e.target.value) / 100)}
+            onChange={(e) => dispatch(setParameters({ mutationRate: Number(e.target.value) / 100 }))}
             style={{ width: '200px', cursor: 'pointer' }}
           />
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
@@ -308,7 +316,7 @@ const Parametros = ({ canRecalculate, tutoresData, alumnosData }: any) => {
             min="50"
             max="95"
             value={crossoverRate * 100}
-            onChange={(e) => setCrossoverRate(Number(e.target.value) / 100)}
+            onChange={(e) => dispatch(setParameters({ crossoverRate: Number(e.target.value) / 100 }))}
             style={{ width: '200px', cursor: 'pointer' }}
           />
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
@@ -325,7 +333,7 @@ const Parametros = ({ canRecalculate, tutoresData, alumnosData }: any) => {
             min="2"
             max="10"
             value={tournamentSize}
-            onChange={(e) => setTournamentSize(Number(e.target.value))}
+            onChange={(e) => dispatch(setParameters({ tournamentSize: Number(e.target.value) }))}
             style={{ width: '200px', cursor: 'pointer' }}
           />
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
@@ -342,7 +350,7 @@ const Parametros = ({ canRecalculate, tutoresData, alumnosData }: any) => {
             min="0"
             max="10"
             value={elitismCount}
-            onChange={(e) => setElitismCount(Number(e.target.value))}
+            onChange={(e) => dispatch(setParameters({ elitismCount: Number(e.target.value) }))}
             style={{ width: '200px', cursor: 'pointer' }}
           />
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
@@ -839,7 +847,9 @@ const Maraton = () => {
   const downloadExampleCSV = (type: 'alumnos' | 'tutores') => {
     const filename = type === 'alumnos' ? 'alumnos.csv' : 'tutores.csv';
     const link = document.createElement('a');
-    link.href = `/examples/${filename}`;
+    // Use the base URL for both dev and production
+    const baseUrl = import.meta.env.BASE_URL;
+    link.href = `${baseUrl}${filename}`;
     link.download = `ejemplo_${filename}`;
     link.style.visibility = 'hidden';
     document.body.appendChild(link);

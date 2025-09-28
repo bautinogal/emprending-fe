@@ -156,15 +156,15 @@ const calculateSimilarity = (str1: string, str2: string): number => {
   if (normalizedStr1 === normalizedStr2) return 1.0;
 
   // Check for abbreviation match first (higher priority than Levenshtein)
-  const parts1 = normalizedStr1.split(' ');
-  const parts2 = normalizedStr2.split(' ');
-  if (parts1.length >= 2 && parts2.length >= 2) {
-    const lastNameMatch = parts1[parts1.length - 1] === parts2[parts2.length - 1];
-    const firstInitialMatch = parts1[0].charAt(0) === parts2[0].charAt(0);
-    if (lastNameMatch && parts1[0].length <= 2 && firstInitialMatch) {
-      return 0.95; // High similarity for abbreviations
-    }
-  }
+  // const parts1 = normalizedStr1.split(' ');
+  // const parts2 = normalizedStr2.split(' ');
+  // if (parts1.length >= 2 && parts2.length >= 2) {
+  //   const lastNameMatch = parts1[parts1.length - 1] === parts2[parts2.length - 1];
+  //   const firstInitialMatch = parts1[0].charAt(0) === parts2[0].charAt(0);
+  //   if (lastNameMatch && parts1[0].length <= 2 && firstInitialMatch) {
+  //     return 0.95; // High similarity for abbreviations
+  //   }
+  // }
 
   // Calculate Levenshtein similarity for other cases
   const maxLen = Math.max(normalizedStr1.length, normalizedStr2.length);
@@ -178,7 +178,7 @@ const calculateSimilarity = (str1: string, str2: string): number => {
 
 export const optimizeGroups = createAsyncThunk(
   'app/optimizeGroups',
-  async (_, { getState, rejectWithValue }) => {
+  async (payload, { getState, rejectWithValue }) => {
 
     interface Tutor { nombre: string, apellido: string, email: string, id: number }
 
@@ -236,6 +236,7 @@ export const optimizeGroups = createAsyncThunk(
             .sort((a, b) => b.score - a.score);
 
           const bestMatch = matchRanking[0];
+
           if (bestMatch && bestMatch.score >= parameters.similarityThreshold) {
             return bestMatch;
           } else {
@@ -251,7 +252,7 @@ export const optimizeGroups = createAsyncThunk(
         });
         return { ...alumno, tutores: alumnoTutores, id: i }
       });
-
+      console.log('Data prepared:', { alumnos, tutores, warnings });
       return { alumnos, tutores, warnings };
     };
 
@@ -298,11 +299,21 @@ export const optimizeGroups = createAsyncThunk(
       const individuals: { [key: string]: Individual } = {};
 
       for (let i = 0; i < parameters.populationSize; i++) {
-        let individual = shuffleArray(alumnosIds, rng());
+        let seed = Math.floor(rng() * 1000000);
+        let individual = shuffleArray(alumnosIds, seed);
         let hash = hashArray(individual);
-        while (individuals[hash]) {
-          individual = shuffleArray(alumnosIds, rng());
+        let counter = 0;
+        console.log({ hash, individual, counter, individuals, alumnosIds, alumnos });
+        while (individuals[hash] != null ) {
+          console.log('Duplicate individual found, reshuffling...');
+          seed = Math.floor(rng() * 1000000);
+          individual = shuffleArray(alumnosIds, seed);
           hash = hashArray(individual);
+          counter++;
+          if (counter > 100) {
+            console.error('Too many attempts to find a unique individual');
+            break;
+          }
         };
         const grupos = calculateGrupos(individual, alumnos, parameters);
         const fitness = calculateFitness(grupos, alumnos, parameters);
@@ -332,23 +343,28 @@ export const optimizeGroups = createAsyncThunk(
     };
 
     try {
-      const state = getState() as { app: AppState };
-      const { alumnosData, tutoresData, parameters } = state.app;
+      const state = getState() as { app: AppState};
+      console.log('Optimization process started with state:', {...state.app, ...payload as any});
+      const { alumnosData, tutoresData, parameters } = {...state.app, ...payload as any};
       const { alumnos, tutores, warnings } = prepareData(alumnosData, tutoresData, parameters);
       const { perfectFitness, maxTeoricalFitness } = getMaxScores(alumnos, parameters);
 
+      console.log('Starting genetic algorithm with:', { alumnosData, tutoresData, parameters, alumnos, tutores, warnings, perfectFitness, maxTeoricalFitness } );
       let currentBestScore = 0;
-      const rng = mulberry32(parameters.seed);
+      const rng = mulberry32(parameters.seed || 42);
+      console.log('RNG initialized with seed', parameters.seed);
       let history = initHistory(alumnos, tutores, parameters, rng);
       let percentageCompleted = 0;
-
+      console.log({ alumnos, tutores, parameters, perfectFitness, maxTeoricalFitness });
       for (let i = 0; i < parameters.geneticIterations && currentBestScore < perfectFitness; i++) {
+        console.log(`Iteration ${i + 1}/${parameters.geneticIterations} - ${Math.round(percentageCompleted * 100)}% completed - Best score: ${currentBestScore}/${perfectFitness} (${(currentBestScore / perfectFitness * 100).toFixed(2)}%)`);
         iterate(history, alumnos, parameters);
         percentageCompleted = (i + 1) / parameters.geneticIterations;
       }
 
       history.endTime = Date.now();
-
+      console.log('Total duration:', ((history.endTime - history.inititialTime) / 1000.000).toFixed(3), 'seconds');
+      console.log('Optimization process finished:', { history, currentBestScore, perfectFitness, maxTeoricalFitness });
       return {
         warnings,
         grupos: history.individuals[history.populationZero[0]].grupos,
@@ -430,6 +446,7 @@ export const {
   setTutoresData,
   setSidebarTab,
   setSidebarOpen,
+  setParameters,
   clearOptimizationError,
 } = appSlice.actions;
 

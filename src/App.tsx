@@ -37,16 +37,39 @@ const Tutorias = () => {
   );
 };
 
-const Maraton = () => {
-  const tabs = ['Tutores', 'Alumnos', 'Parámetros', 'Resultados'];
-  const [maratonTab, setMaratonTab] = useState('Tutores');
+const Parametros = ({ canRecalculate, tutoresData, alumnosData }: any) => {
 
-  const [alumnosFile, setAlumnosFile] = useState<File | null>(null);
-  const [tutoresFile, setTutoresFile] = useState<File | null>(null);
-  const [alumnosData, setAlumnosData] = useState<any[]>([]);
-  const [tutoresData, setTutoresData] = useState<any[]>([]);
-  const [alumnosColumns, setAlumnosColumns] = useState<GridColDef[]>([]);
-  const [tutoresColumns, setTutoresColumns] = useState<GridColDef[]>([]);
+  const onRecalculate = () => {
+    console.log('Handle Recalculate triggered');
+    console.log({
+      dataStatus: {
+        alumnosData,
+        tutoresData
+      },
+      assignmentParams: {
+        minCantidadGrupos,
+        maxCantidadGrupos,
+        maximosAlumnosPorGrupo,
+        similarityThreshold,
+        pesoRelativoTutores
+      },
+      geneticParams: {
+        seed,
+        geneticIterations,
+        populationSize,
+        mutationRate,
+        crossoverRate,
+        tournamentSize,
+        elitismCount,
+        complexityTotal: populationSize * geneticIterations
+      }
+    });
+
+    if (alumnosData.length === 0 || tutoresData.length === 0) {
+      alert('Por favor, carga los archivos CSV de tutores y alumnos antes de recalcular.');
+      return;
+    }
+  }
 
   // Genetic Algorithm parameters
   const [seed, setSeed] = useState(42);
@@ -63,6 +86,295 @@ const Maraton = () => {
   const [maximosAlumnosPorGrupo, setMaximosAlumnosPorGrupo] = useState(10);
   const [pesoRelativoTutores, setPesoRelativoTutores] = useState([10, 5, 3, 2, 1]);
   const [similarityThreshold, setSimilarityThreshold] = useState(0.8);
+
+  const handlePesoChange = (index: number, value: string) => {
+    setPesoRelativoTutores((prev: number[]) => {
+      const newPesos = [...prev];
+      newPesos[index] = Number(value);
+      return newPesos;
+    });
+  };
+
+  return <Box sx={{ p: 3, overflowY: 'auto', height: '100%' }}>
+    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+      <Typography variant="h5" fontWeight={600}>
+        Parámetros de la Maratón
+      </Typography>
+      <Button
+        variant="contained"
+        onClick={onRecalculate}
+        disabled={!canRecalculate}
+        sx={{ bgcolor: 'primary.main' }}
+      >
+        Recalcular Grupos
+      </Button>
+    </Box>
+    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, maxWidth: 400 }}>
+      <Box>
+        <Typography variant="body1" sx={{ mb: 1 }}>
+          Mínima Cantidad de Grupos
+        </Typography>
+        <input
+          type="number"
+          value={minCantidadGrupos}
+          onChange={(e) => setMinCantidadGrupos(Number(e.target.value))}
+          min="1"
+          style={{
+            padding: '8px 12px',
+            border: '1px solid #ccc',
+            borderRadius: '4px',
+            fontSize: '16px',
+            width: '100px'
+          }}
+        />
+      </Box>
+      <Box>
+        <Typography variant="body1" sx={{ mb: 1 }}>
+          Máxima Cantidad de Grupos
+        </Typography>
+        <input
+          type="number"
+          value={maxCantidadGrupos}
+          onChange={(e) => setMaxCantidadGrupos(Number(e.target.value))}
+          min={minCantidadGrupos}
+          style={{
+            padding: '8px 12px',
+            border: '1px solid #ccc',
+            borderRadius: '4px',
+            fontSize: '16px',
+            width: '100px'
+          }}
+        />
+        {(tutoresData.length > 0 || alumnosData.length > 0) && maxCantidadGrupos > Math.min(tutoresData.length || Infinity, alumnosData.length || Infinity) && (
+          <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 0.5 }}>
+            ⚠️ Máximo {Math.min(tutoresData.length || Infinity, alumnosData.length || Infinity)} grupos
+            (limitado por {tutoresData.length <= alumnosData.length ? 'tutores' : 'alumnos'}: {Math.min(tutoresData.length || Infinity, alumnosData.length || Infinity)})
+          </Typography>
+        )}
+      </Box>
+      <Box>
+        <Typography variant="body1" sx={{ mb: 1 }}>
+          Máximos Alumnos por Grupo
+        </Typography>
+        <input
+          type="number"
+          value={maximosAlumnosPorGrupo}
+          onChange={(e) => setMaximosAlumnosPorGrupo(Number(e.target.value))}
+          style={{
+            padding: '8px 12px',
+            border: '1px solid #ccc',
+            borderRadius: '4px',
+            fontSize: '16px',
+            width: '100px'
+          }}
+        />
+      </Box>
+      <Box>
+        <Typography variant="body1" sx={{ mb: 1 }}>
+          Peso relativo tutores
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 1 }}>
+          {pesoRelativoTutores.map((peso: number, index: number) => (
+            <Box key={index}>
+              <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>
+                Tutor {index + 1}
+              </Typography>
+              <input
+                type="number"
+                value={peso}
+                onChange={(e) => handlePesoChange(index, e.target.value)}
+                style={{
+                  padding: '8px 12px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                  fontSize: '16px',
+                  width: '60px'
+                }}
+              />
+            </Box>
+          ))}
+        </Box>
+      </Box>
+      <Box>
+        <Typography variant="body1" sx={{ mb: 1 }}>
+          Sensibilidad de coincidencia de nombres: {(similarityThreshold * 100).toFixed(0)}%
+        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+          <Typography variant="caption">Estricto</Typography>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={similarityThreshold * 100}
+            onChange={(e) => setSimilarityThreshold(Number(e.target.value) / 100)}
+            style={{
+              width: '300px',
+              cursor: 'pointer'
+            }}
+          />
+          <Typography variant="caption">Flexible</Typography>
+        </Box>
+        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+          0% = Solo coincidencias exactas | 100% = Acepta variaciones (acentos, abreviaciones)
+        </Typography>
+      </Box>
+    </Box>
+
+    {/* Genetic Algorithm Parameters */}
+    <Box sx={{ mt: 4 }}>
+      <Typography variant="h6" fontWeight={600} sx={{ mb: 2 }}>
+        Parámetros del Algoritmo Genético
+      </Typography>
+
+      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 3, maxWidth: 800 }}>
+        <Box>
+          <Typography variant="body1" sx={{ mb: 1 }}>
+            Semilla (Seed): {seed}
+          </Typography>
+          <input
+            type="number"
+            value={seed}
+            onChange={(e) => setSeed(Number(e.target.value))}
+            style={{
+              padding: '8px 12px',
+              border: '1px solid #ccc',
+              borderRadius: '4px',
+              fontSize: '16px',
+              width: '150px'
+            }}
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+            Para resultados reproducibles
+          </Typography>
+        </Box>
+
+        <Box>
+          <Typography variant="body1" sx={{ mb: 1 }}>
+            Iteraciones: {geneticIterations}
+          </Typography>
+          <input
+            type="range"
+            min="10"
+            max="500"
+            value={geneticIterations}
+            onChange={(e) => setGeneticIterations(Number(e.target.value))}
+            style={{ width: '200px', cursor: 'pointer' }}
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+            Más iteraciones = mejor solución pero más lento
+          </Typography>
+        </Box>
+
+        <Box>
+          <Typography variant="body1" sx={{ mb: 1 }}>
+            Tamaño de Población: {populationSize}
+          </Typography>
+          <input
+            type="range"
+            min="10"
+            max="200"
+            value={populationSize}
+            onChange={(e) => setPopulationSize(Number(e.target.value))}
+            style={{ width: '200px', cursor: 'pointer' }}
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+            Más población = más diversidad
+          </Typography>
+        </Box>
+
+        <Box>
+          <Typography variant="body1" sx={{ mb: 1 }}>
+            Tasa de Mutación: {(mutationRate * 100).toFixed(0)}%
+          </Typography>
+          <input
+            type="range"
+            min="1"
+            max="30"
+            value={mutationRate * 100}
+            onChange={(e) => setMutationRate(Number(e.target.value) / 100)}
+            style={{ width: '200px', cursor: 'pointer' }}
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+            5-20% típico (previene convergencia prematura)
+          </Typography>
+        </Box>
+
+        <Box>
+          <Typography variant="body1" sx={{ mb: 1 }}>
+            Tasa de Cruce: {(crossoverRate * 100).toFixed(0)}%
+          </Typography>
+          <input
+            type="range"
+            min="50"
+            max="95"
+            value={crossoverRate * 100}
+            onChange={(e) => setCrossoverRate(Number(e.target.value) / 100)}
+            style={{ width: '200px', cursor: 'pointer' }}
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+            60-90% típico (mezcla de soluciones)
+          </Typography>
+        </Box>
+
+        <Box>
+          <Typography variant="body1" sx={{ mb: 1 }}>
+            Tamaño del Torneo: {tournamentSize}
+          </Typography>
+          <input
+            type="range"
+            min="2"
+            max="10"
+            value={tournamentSize}
+            onChange={(e) => setTournamentSize(Number(e.target.value))}
+            style={{ width: '200px', cursor: 'pointer' }}
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+            2-3 exploración, 4-5 explotación
+          </Typography>
+        </Box>
+
+        <Box>
+          <Typography variant="body1" sx={{ mb: 1 }}>
+            Elitismo: {elitismCount} individuos
+          </Typography>
+          <input
+            type="range"
+            min="0"
+            max="10"
+            value={elitismCount}
+            onChange={(e) => setElitismCount(Number(e.target.value))}
+            style={{ width: '200px', cursor: 'pointer' }}
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+            Mejores individuos que pasan sin cambios
+          </Typography>
+        </Box>
+
+        <Box>
+          <Typography variant="body1" sx={{ mb: 1 }}>
+            Complejidad Total: {(populationSize * geneticIterations).toLocaleString()}
+          </Typography>
+          <Typography variant="caption" color={populationSize * geneticIterations > 100000 ? 'warning.main' : 'text.secondary'} sx={{ display: 'block' }}>
+            {populationSize * geneticIterations < 10000 ? 'Rápido' :
+              populationSize * geneticIterations < 50000 ? 'Normal' :
+                populationSize * geneticIterations < 100000 ? 'Lento' : 'Muy lento'}
+          </Typography>
+        </Box>
+      </Box>
+    </Box>
+  </Box>;
+};
+
+const Maraton = () => {
+  const tabs = ['Tutores', 'Alumnos', 'Parámetros', 'Resultados'];
+  const [maratonTab, setMaratonTab] = useState('Tutores');
+
+  const [alumnosFile, setAlumnosFile] = useState<File | null>(null);
+  const [tutoresFile, setTutoresFile] = useState<File | null>(null);
+  const [alumnosData, setAlumnosData] = useState<any[]>([]);
+  const [tutoresData, setTutoresData] = useState<any[]>([]);
+  const [alumnosColumns, setAlumnosColumns] = useState<GridColDef[]>([]);
+  const [tutoresColumns, setTutoresColumns] = useState<GridColDef[]>([]);
 
   // Results state
   const [assignmentResults, setAssignmentResults] = useState<any>(null);
@@ -118,304 +430,304 @@ const Maraton = () => {
     return { score, maxScore };
   };
 
-  // Algorithm to create optimal groups
-  const createOptimalGroups = () => {
-    if (alumnosData.length === 0 || tutoresData.length === 0) return;
+  // // Algorithm to create optimal groups
+  // const createOptimalGroups = () => {
+  //   if (alumnosData.length === 0 || tutoresData.length === 0) return;
 
-    console.log('Starting group optimization...');
-    console.log(`Testing group counts from ${minCantidadGrupos} to ${maxCantidadGrupos}`);
+  //   console.log('Starting group optimization...');
+  //   //console.log(`Testing group counts from ${minCantidadGrupos} to ${maxCantidadGrupos}`);
 
-    // Create tutor full names for matching
-    const tutorFullNames = tutoresData.map(t => ({
-      original: `${t.Nombre} ${t.Apellido}`,
-      normalized: normalizeName(`${t.Nombre} ${t.Apellido}`),
-      firstName: t.Nombre,
-      lastName: t.Apellido
-    }));
+  //   // Create tutor full names for matching
+  //   const tutorFullNames = tutoresData.map(t => ({
+  //     original: `${t.Nombre} ${t.Apellido}`,
+  //     normalized: normalizeName(`${t.Nombre} ${t.Apellido}`),
+  //     firstName: t.Nombre,
+  //     lastName: t.Apellido
+  //   }));
 
-    // Calculate affinity score for each alumno-group combination
-    const calculateAffinity = (alumno: any, groupTutors: string[]) => {
-      let score = 0;
+  //   // Calculate affinity score for each alumno-group combination
+  //   const calculateAffinity = (alumno: any, groupTutors: string[]) => {
+  //     let score = 0;
 
-      // Check each tutor preference with weights
-      for (let i = 1; i <= 5; i++) {
-        const tutorPref = alumno[`Tutor${i}`];
-        if (!tutorPref) continue;
+  //     // Check each tutor preference with weights
+  //     for (let i = 1; i <= 5; i++) {
+  //       const tutorPref = alumno[`Tutor${i}`];
+  //       if (!tutorPref) continue;
 
-        const weight = pesoRelativoTutores[i - 1] || 0;
+  //       const weight = pesoRelativoTutores[i - 1] || 0;
 
-        // First check if this tutor preference is valid (exists in database)
-        let tutorExistsInDatabase = false;
-        const validTutorNames = tutorFullNames.map(t => t.original);
-        for (const validTutor of validTutorNames) {
-          const similarity = calculateSimilarity(tutorPref, validTutor);
-          const threshold = 1.0 - similarityThreshold;
-          if (similarity >= threshold) {
-            tutorExistsInDatabase = true;
-            break;
-          }
-        }
+  //       // First check if this tutor preference is valid (exists in database)
+  //       let tutorExistsInDatabase = false;
+  //       const validTutorNames = tutorFullNames.map(t => t.original);
+  //       for (const validTutor of validTutorNames) {
+  //         const similarity = calculateSimilarity(tutorPref, validTutor);
+  //         const threshold = 1.0 - similarityThreshold;
+  //         if (similarity >= threshold) {
+  //           tutorExistsInDatabase = true;
+  //           break;
+  //         }
+  //       }
 
-        // Only give credit if tutor exists in database AND is in the group
-        if (tutorExistsInDatabase) {
-          // Check if this valid tutor is in the group
-          let maxSimilarity = 0;
+  //       // Only give credit if tutor exists in database AND is in the group
+  //       if (tutorExistsInDatabase) {
+  //         // Check if this valid tutor is in the group
+  //         let maxSimilarity = 0;
 
-          for (const groupTutor of groupTutors) {
-            const similarity = calculateSimilarity(tutorPref, groupTutor);
+  //         for (const groupTutor of groupTutors) {
+  //           const similarity = calculateSimilarity(tutorPref, groupTutor);
 
-            // Special handling for abbreviations
-            const prefParts = normalizeName(tutorPref).split(' ');
-            const gtParts = normalizeName(groupTutor).split(' ');
+  //           // Special handling for abbreviations
+  //           const prefParts = normalizeName(tutorPref).split(' ');
+  //           const gtParts = normalizeName(groupTutor).split(' ');
 
-            // Check if it's an abbreviation match (e.g., "r. hernandez" matches "roberto hernandez")
-            if (prefParts.length >= 2 && gtParts.length >= 2) {
-              const lastNameMatch = prefParts[prefParts.length - 1] === gtParts[gtParts.length - 1];
-              const firstInitialMatch = prefParts[0].charAt(0) === gtParts[0].charAt(0);
-              if (lastNameMatch && prefParts[0].length <= 2 && firstInitialMatch) {
-                // Boost similarity for abbreviation matches
-                maxSimilarity = Math.max(maxSimilarity, 0.95);
-                continue;
-              }
-            }
+  //           // Check if it's an abbreviation match (e.g., "r. hernandez" matches "roberto hernandez")
+  //           if (prefParts.length >= 2 && gtParts.length >= 2) {
+  //             const lastNameMatch = prefParts[prefParts.length - 1] === gtParts[gtParts.length - 1];
+  //             const firstInitialMatch = prefParts[0].charAt(0) === gtParts[0].charAt(0);
+  //             if (lastNameMatch && prefParts[0].length <= 2 && firstInitialMatch) {
+  //               // Boost similarity for abbreviation matches
+  //               maxSimilarity = Math.max(maxSimilarity, 0.95);
+  //               continue;
+  //             }
+  //           }
 
-            if (similarity > maxSimilarity) {
-              maxSimilarity = similarity;
-            }
-          }
+  //           if (similarity > maxSimilarity) {
+  //             maxSimilarity = similarity;
+  //           }
+  //         }
 
-          // Give credit when tutor is in the group
-          const threshold = 1.0 - similarityThreshold;
-          if (maxSimilarity >= threshold) {
-            score += weight;
-          }
-        }
-      }
+  //         // Give credit when tutor is in the group
+  //         const threshold = 1.0 - similarityThreshold;
+  //         if (maxSimilarity >= threshold) {
+  //           score += weight;
+  //         }
+  //       }
+  //     }
 
-      return score;
-    };
+  //     return score;
+  //   };
 
-    // Function to validate tutors and collect warnings
-    const validateTutorPreferences = () => {
-      const warnings: string[] = [];
-      const validTutorNames = tutorFullNames.map(t => t.original);
+  //   // Function to validate tutors and collect warnings
+  //   const validateTutorPreferences = () => {
+  //     const warnings: string[] = [];
+  //     const validTutorNames = tutorFullNames.map(t => t.original);
 
-      alumnosData.forEach((alumno) => {
-        for (let i = 1; i <= 5; i++) {
-          const tutorPref = alumno[`Tutor${i}`];
-          if (!tutorPref) continue;
+  //     alumnosData.forEach((alumno) => {
+  //       for (let i = 1; i <= 5; i++) {
+  //         const tutorPref = alumno[`Tutor${i}`];
+  //         if (!tutorPref) continue;
 
-          // Check if this tutor preference matches any available tutor
-          let bestSimilarity = 0;
-          let bestMatch = null;
+  //         // Check if this tutor preference matches any available tutor
+  //         let bestSimilarity = 0;
+  //         let bestMatch = null;
 
-          for (const validTutor of validTutorNames) {
-            const similarity = calculateSimilarity(tutorPref, validTutor);
-            if (similarity > bestSimilarity) {
-              bestSimilarity = similarity;
-              bestMatch = validTutor;
-            }
-          }
+  //         for (const validTutor of validTutorNames) {
+  //           const similarity = calculateSimilarity(tutorPref, validTutor);
+  //           if (similarity > bestSimilarity) {
+  //             bestSimilarity = similarity;
+  //             bestMatch = validTutor;
+  //           }
+  //         }
 
-          // Show warnings for similarities below threshold
-          const threshold = 1.0 - similarityThreshold;
-          if (bestSimilarity < threshold) {
-            if (bestSimilarity > 0.5) {
-              // Close match but below threshold - might be a typo
-              warnings.push(
-                `"${alumno.Nombre} ${alumno.Apellido}" seleccionó "${tutorPref}" (Tutor${i}) - ¿querías decir "${bestMatch}"? (${(bestSimilarity * 100).toFixed(0)}% coincidencia)`
-              );
-            } else {
-              // Very low similarity - likely non-existent tutor
-              warnings.push(
-                `"${alumno.Nombre} ${alumno.Apellido}" seleccionó "${tutorPref}" (Tutor${i}) que no coincide con ningún tutor disponible`
-              );
-            }
-          }
-          // Note: abbreviations with 95% similarity won't show warnings with 80% threshold
-        }
-      });
+  //         // Show warnings for similarities below threshold
+  //         const threshold = 1.0 - similarityThreshold;
+  //         if (bestSimilarity < threshold) {
+  //           if (bestSimilarity > 0.5) {
+  //             // Close match but below threshold - might be a typo
+  //             warnings.push(
+  //               `"${alumno.Nombre} ${alumno.Apellido}" seleccionó "${tutorPref}" (Tutor${i}) - ¿querías decir "${bestMatch}"? (${(bestSimilarity * 100).toFixed(0)}% coincidencia)`
+  //             );
+  //           } else {
+  //             // Very low similarity - likely non-existent tutor
+  //             warnings.push(
+  //               `"${alumno.Nombre} ${alumno.Apellido}" seleccionó "${tutorPref}" (Tutor${i}) que no coincide con ningún tutor disponible`
+  //             );
+  //           }
+  //         }
+  //         // Note: abbreviations with 95% similarity won't show warnings with 80% threshold
+  //       }
+  //     });
 
-      return warnings;
-    };
+  //     return warnings;
+  //   };
 
-    // Calculate perfect score (if all students got all their preferred tutors)
-    const calculatePerfectScore = () => {
-      let perfectScore = 0;
-      alumnosData.forEach((alumno) => {
-        for (let i = 1; i <= 5; i++) {
-          const tutorPref = alumno[`Tutor${i}`];
-          if (tutorPref) {
-            const weight = pesoRelativoTutores[i - 1] || 0;
-            perfectScore += weight; // Assume perfect match (score = weight)
-          }
-        }
-      });
-      return perfectScore;
-    };
+  //   // Calculate perfect score (if all students got all their preferred tutors)
+  //   const calculatePerfectScore = () => {
+  //     let perfectScore = 0;
+  //     alumnosData.forEach((alumno) => {
+  //       for (let i = 1; i <= 5; i++) {
+  //         const tutorPref = alumno[`Tutor${i}`];
+  //         if (tutorPref) {
+  //           const weight = pesoRelativoTutores[i - 1] || 0;
+  //           perfectScore += weight; // Assume perfect match (score = weight)
+  //         }
+  //       }
+  //     });
+  //     return perfectScore;
+  //   };
 
-    // Function to create and evaluate groups for a specific count
-    const evaluateGroupConfiguration = (cantidadGrupos: number) => {
-      const newGroups: any[] = [];
+  //   // Function to create and evaluate groups for a specific count
+  //   const evaluateGroupConfiguration = (cantidadGrupos: number) => {
+  //     const newGroups: any[] = [];
 
-      // Initialize empty groups
-      for (let i = 0; i < cantidadGrupos; i++) {
-        newGroups.push({
-          id: i + 1,
-          name: `Grupo ${i + 1}`,
-          tutores: [],
-          alumnos: [],
-          maxCapacity: maximosAlumnosPorGrupo
-        });
-      }
+  //     // Initialize empty groups
+  //     for (let i = 0; i < cantidadGrupos; i++) {
+  //       newGroups.push({
+  //         id: i + 1,
+  //         name: `Grupo ${i + 1}`,
+  //         tutores: [],
+  //         alumnos: [],
+  //         maxCapacity: maximosAlumnosPorGrupo
+  //       });
+  //     }
 
-      // Distribute tutors ensuring each group gets at least one
-      tutorFullNames.forEach((tutor, index) => {
-        const groupIndex = index % cantidadGrupos; // Round-robin distribution
-        newGroups[groupIndex].tutores.push(tutor.original);
-      });
+  //     // Distribute tutors ensuring each group gets at least one
+  //     tutorFullNames.forEach((tutor, index) => {
+  //       const groupIndex = index % cantidadGrupos; // Round-robin distribution
+  //       newGroups[groupIndex].tutores.push(tutor.original);
+  //     });
 
-      // Create assignment tracking
-      const assignments: any[] = [];
-      const assignedAlumnos = new Set();
+  //     // Create assignment tracking
+  //     const assignments: any[] = [];
+  //     const assignedAlumnos = new Set();
 
-      // Sort alumnos by score (higher scores first)
-      const alumnosWithScores = alumnosData.map(alumno => {
-        const scores = newGroups.map(group => ({
-          groupId: group.id,
-          score: calculateAffinity(alumno, group.tutores)
-        }));
-        scores.sort((a, b) => b.score - a.score);
+  //     // Sort alumnos by score (higher scores first)
+  //     const alumnosWithScores = alumnosData.map(alumno => {
+  //       const scores = newGroups.map(group => ({
+  //         groupId: group.id,
+  //         score: calculateAffinity(alumno, group.tutores)
+  //       }));
+  //       scores.sort((a, b) => b.score - a.score);
 
-        return {
-          alumno,
-          preferredGroups: scores
-        };
-      });
+  //       return {
+  //         alumno,
+  //         preferredGroups: scores
+  //       };
+  //     });
 
-      // Sort by puntaje (descending), then by fecha (ascending), then by preference score
-      alumnosWithScores.sort((a, b) => {
-        // First priority: Higher puntaje (better students first)
-        const puntajeA = parseFloat(a.alumno.Puntaje) || 0;
-        const puntajeB = parseFloat(b.alumno.Puntaje) || 0;
-        if (puntajeA !== puntajeB) {
-          return puntajeB - puntajeA; // Higher scores first
-        }
+  //     // Sort by puntaje (descending), then by fecha (ascending), then by preference score
+  //     alumnosWithScores.sort((a, b) => {
+  //       // First priority: Higher puntaje (better students first)
+  //       const puntajeA = parseFloat(a.alumno.Puntaje) || 0;
+  //       const puntajeB = parseFloat(b.alumno.Puntaje) || 0;
+  //       if (puntajeA !== puntajeB) {
+  //         return puntajeB - puntajeA; // Higher scores first
+  //       }
 
-        // Second priority: Earlier fecha (older applications first)
-        const fechaA = new Date(a.alumno.Fecha || '9999-12-31');
-        const fechaB = new Date(b.alumno.Fecha || '9999-12-31');
-        if (fechaA.getTime() !== fechaB.getTime()) {
-          return fechaA.getTime() - fechaB.getTime(); // Earlier dates first
-        }
+  //       // Second priority: Earlier fecha (older applications first)
+  //       const fechaA = new Date(a.alumno.Fecha || '9999-12-31');
+  //       const fechaB = new Date(b.alumno.Fecha || '9999-12-31');
+  //       if (fechaA.getTime() !== fechaB.getTime()) {
+  //         return fechaA.getTime() - fechaB.getTime(); // Earlier dates first
+  //       }
 
-        // Third priority: Higher tutor preference score
-        return b.preferredGroups[0].score - a.preferredGroups[0].score;
-      });
+  //       // Third priority: Higher tutor preference score
+  //       return b.preferredGroups[0].score - a.preferredGroups[0].score;
+  //     });
 
-      // Log the assignment order for debugging
-      console.log('Assignment order for', cantidadGrupos, 'groups:');
-      alumnosWithScores.slice(0, 5).forEach((item, index) => {
-        const { alumno } = item;
-        console.log(`${index + 1}. ${alumno.Nombre} ${alumno.Apellido} - Puntaje: ${alumno.Puntaje}, Fecha: ${alumno.Fecha}`);
-      });
-      if (alumnosWithScores.length > 5) {
-        console.log(`... and ${alumnosWithScores.length - 5} more students`);
-      }
+  //     // Log the assignment order for debugging
+  //     console.log('Assignment order for', cantidadGrupos, 'groups:');
+  //     alumnosWithScores.slice(0, 5).forEach((item, index) => {
+  //       const { alumno } = item;
+  //       console.log(`${index + 1}. ${alumno.Nombre} ${alumno.Apellido} - Puntaje: ${alumno.Puntaje}, Fecha: ${alumno.Fecha}`);
+  //     });
+  //     if (alumnosWithScores.length > 5) {
+  //       console.log(`... and ${alumnosWithScores.length - 5} more students`);
+  //     }
 
-      // Assign alumnos to groups
-      let totalScore = 0;
-      for (const { alumno, preferredGroups } of alumnosWithScores) {
-        // Try to assign to preferred groups in order
-        for (const { groupId, score } of preferredGroups) {
-          const group = newGroups.find(g => g.id === groupId);
-          if (group && group.alumnos.length < group.maxCapacity) {
-            group.alumnos.push(alumno);
-            assignedAlumnos.add(alumno.id);
-            // Use calculateMatchScore to ensure consistent calculation with Satisfacción Promedio
-            const { score: matchScore } = calculateMatchScore(alumno, group.tutores);
-            totalScore += matchScore;
+  //     // Assign alumnos to groups
+  //     let totalScore = 0;
+  //     for (const { alumno, preferredGroups } of alumnosWithScores) {
+  //       // Try to assign to preferred groups in order
+  //       for (const { groupId, score } of preferredGroups) {
+  //         const group = newGroups.find(g => g.id === groupId);
+  //         if (group && group.alumnos.length < group.maxCapacity) {
+  //           group.alumnos.push(alumno);
+  //           assignedAlumnos.add(alumno.id);
+  //           // Use calculateMatchScore to ensure consistent calculation with Satisfacción Promedio
+  //           const { score: matchScore } = calculateMatchScore(alumno, group.tutores);
+  //           totalScore += matchScore;
 
-            assignments.push({
-              alumnoName: `${alumno.Nombre} ${alumno.Apellido}`,
-              groupId,
-              groupName: group.name,
-              affinityScore: score,
-              matchedTutors: []
-            });
+  //           assignments.push({
+  //             alumnoName: `${alumno.Nombre} ${alumno.Apellido}`,
+  //             groupId,
+  //             groupName: group.name,
+  //             affinityScore: score,
+  //             matchedTutors: []
+  //           });
 
-            break;
-          }
-        }
-      }
+  //           break;
+  //         }
+  //       }
+  //     }
 
-      const totalAssigned = assignedAlumnos.size;
-      const totalAlumnos = alumnosData.length;
+  //     const totalAssigned = assignedAlumnos.size;
+  //     const totalAlumnos = alumnosData.length;
 
-      return {
-        cantidadGrupos,
-        groups: newGroups,
-        assignments,
-        totalScore,
-        statistics: {
-          totalAlumnos,
-          totalAssigned,
-          unassigned: totalAlumnos - totalAssigned,
-          avgGroupSize: (totalAssigned / cantidadGrupos).toFixed(1),
-          groupsUsed: newGroups.filter(g => g.alumnos.length > 0).length
-        }
-      };
-    };
+  //     return {
+  //       cantidadGrupos,
+  //       groups: newGroups,
+  //       assignments,
+  //       totalScore,
+  //       statistics: {
+  //         totalAlumnos,
+  //         totalAssigned,
+  //         unassigned: totalAlumnos - totalAssigned,
+  //         avgGroupSize: (totalAssigned / cantidadGrupos).toFixed(1),
+  //         groupsUsed: newGroups.filter(g => g.alumnos.length > 0).length
+  //       }
+  //     };
+  //   };
 
-    // Validate tutor preferences and collect warnings
-    const tutorWarnings = validateTutorPreferences();
-    if (tutorWarnings.length > 0) {
-      console.warn('Tutor validation warnings:', tutorWarnings);
-    }
+  //   // Validate tutor preferences and collect warnings
+  //   const tutorWarnings = validateTutorPreferences();
+  //   if (tutorWarnings.length > 0) {
+  //     console.warn('Tutor validation warnings:', tutorWarnings);
+  //   }
 
-    // Calculate the theoretical perfect score
-    const perfectScore = calculatePerfectScore();
-    console.log(`Perfect score (theoretical maximum): ${perfectScore.toFixed(1)}`);
+  //   // Calculate the theoretical perfect score
+  //   const perfectScore = calculatePerfectScore();
+  //   console.log(`Perfect score (theoretical maximum): ${perfectScore.toFixed(1)}`);
 
-    // Try all group counts and find the best one
-    let bestConfiguration = null;
-    let bestScore = -1;
+  //   // Try all group counts and find the best one
+  //   let bestConfiguration = null;
+  //   let bestScore = -1;
 
-    // Limit max groups to number of tutors AND number of alumnos (each group needs at least one tutor and one alumno)
-    const maxPossibleGroups = Math.min(maxCantidadGrupos, tutoresData.length, alumnosData.length);
-    const effectiveMinGroups = Math.min(minCantidadGrupos, maxPossibleGroups);
+  //   // Limit max groups to number of tutors AND number of alumnos (each group needs at least one tutor and one alumno)
+  //   const maxPossibleGroups = Math.min(maxCantidadGrupos, tutoresData.length, alumnosData.length);
+  //   const effectiveMinGroups = Math.min(minCantidadGrupos, maxPossibleGroups);
 
-    console.log(`Limited to ${maxPossibleGroups} groups (max tutors: ${tutoresData.length}, max alumnos: ${alumnosData.length})`);
+  //   console.log(`Limited to ${maxPossibleGroups} groups (max tutors: ${tutoresData.length}, max alumnos: ${alumnosData.length})`);
 
-    for (let groupCount = effectiveMinGroups; groupCount <= maxPossibleGroups; groupCount++) {
-      const configuration = evaluateGroupConfiguration(groupCount);
+  //   for (let groupCount = effectiveMinGroups; groupCount <= maxPossibleGroups; groupCount++) {
+  //     const configuration = evaluateGroupConfiguration(groupCount);
 
-      // Prefer configurations that assign more students and have higher total scores
-      const configScore = configuration.totalScore * 1000 + configuration.statistics.totalAssigned;
+  //     // Prefer configurations that assign more students and have higher total scores
+  //     const configScore = configuration.totalScore * 1000 + configuration.statistics.totalAssigned;
 
-      console.log(`Groups: ${groupCount}, Score: ${configuration.totalScore.toFixed(2)}, Assigned: ${configuration.statistics.totalAssigned}/${configuration.statistics.totalAlumnos}`);
+  //     console.log(`Groups: ${groupCount}, Score: ${configuration.totalScore.toFixed(2)}, Assigned: ${configuration.statistics.totalAssigned}/${configuration.statistics.totalAlumnos}`);
 
-      if (configScore > bestScore) {
-        bestScore = configScore;
-        bestConfiguration = configuration;
-      }
-    }
+  //     if (configScore > bestScore) {
+  //       bestScore = configScore;
+  //       bestConfiguration = configuration;
+  //     }
+  //   }
 
-    if (bestConfiguration) {
-      setAssignmentResults({
-        ...bestConfiguration,
-        timestamp: new Date().toISOString(),
-        selectedGroupCount: bestConfiguration.cantidadGrupos,
-        tutorWarnings: tutorWarnings,
-        perfectScore: perfectScore
-      });
+  //   if (bestConfiguration) {
+  //     setAssignmentResults({
+  //       ...bestConfiguration,
+  //       timestamp: new Date().toISOString(),
+  //       selectedGroupCount: bestConfiguration.cantidadGrupos,
+  //       tutorWarnings: tutorWarnings,
+  //       perfectScore: perfectScore
+  //     });
 
-      console.log(`Optimal configuration: ${bestConfiguration.cantidadGrupos} groups with total score: ${bestConfiguration.totalScore.toFixed(2)}`);
+  //     console.log(`Optimal configuration: ${bestConfiguration.cantidadGrupos} groups with total score: ${bestConfiguration.totalScore.toFixed(2)}`);
 
-      // Switch to results tab
-      setMaratonTab('Resultados');
-    }
-  };
+  //     // Switch to results tab
+  //     setMaratonTab('Resultados');
+  //   }
+  // };
 
   const parseCSV = (text: string, type: 'alumnos' | 'tutores'): { data: any[], columns: GridColDef[], error?: string } => {
     const lines = text.trim().split('\n');
@@ -535,36 +847,6 @@ const Maraton = () => {
     document.body.removeChild(link);
   };
 
-    const handleRecalculate = () => {
-      console.log('Handle Recalculate triggered');
-      console.log({
-        dataStatus: {
-          alumnosCount: alumnosData.length,
-          tutoresCount: tutoresData.length
-        },
-        assignmentParams: {
-          minCantidadGrupos,
-          maxCantidadGrupos,
-          maximosAlumnosPorGrupo,
-          similarityThreshold,
-          pesoRelativoTutores
-        },
-        geneticParams: {
-          seed,
-          geneticIterations,
-          populationSize,
-          mutationRate,
-          crossoverRate,
-          tournamentSize,
-          elitismCount
-        }
-      });
-    if (alumnosData.length === 0 || tutoresData.length === 0) {
-      alert('Por favor, carga los archivos CSV de tutores y alumnos antes de recalcular.');
-      return;
-    }
-  }
-
   const Tutores = () => {
     return <Box sx={{ p: 3, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -663,315 +945,6 @@ const Maraton = () => {
       )}
     </Box>;
   };
-
-  const Parametros = ({
-    minCantidadGrupos,
-    setMinCantidadGrupos,
-    maxCantidadGrupos,
-    setMaxCantidadGrupos,
-    maximosAlumnosPorGrupo,
-    setMaximosAlumnosPorGrupo,
-    pesoRelativoTutores,
-    setPesoRelativoTutores,
-    similarityThreshold,
-    setSimilarityThreshold,
-    seed,
-    setSeed,
-    geneticIterations,
-    setGeneticIterations,
-    populationSize,
-    setPopulationSize,
-    mutationRate,
-    setMutationRate,
-    crossoverRate,
-    setCrossoverRate,
-    tournamentSize,
-    setTournamentSize,
-    elitismCount,
-    setElitismCount,
-    onRecalculate,
-    canRecalculate,
-    tutoresCount,
-    alumnosCount
-  }: any) => {
-    const handlePesoChange = (index: number, value: string) => {
-      setPesoRelativoTutores((prev: number[]) => {
-        const newPesos = [...prev];
-        newPesos[index] = Number(value);
-        return newPesos;
-      });
-    };
-
-    return <Box sx={{ p: 3 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h5" fontWeight={600}>
-          Parámetros de la Maratón
-        </Typography>
-        <Button
-          variant="contained"
-          onClick={onRecalculate}
-          disabled={!canRecalculate}
-          sx={{ bgcolor: 'primary.main' }}
-        >
-          Recalcular Grupos
-        </Button>
-      </Box>
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, maxWidth: 400 }}>
-        <Box>
-          <Typography variant="body1" sx={{ mb: 1 }}>
-            Mínima Cantidad de Grupos
-          </Typography>
-          <input
-            type="number"
-            value={minCantidadGrupos}
-            onChange={(e) => setMinCantidadGrupos(Number(e.target.value))}
-            min="1"
-            style={{
-              padding: '8px 12px',
-              border: '1px solid #ccc',
-              borderRadius: '4px',
-              fontSize: '16px',
-              width: '100px'
-            }}
-          />
-        </Box>
-        <Box>
-          <Typography variant="body1" sx={{ mb: 1 }}>
-            Máxima Cantidad de Grupos
-          </Typography>
-          <input
-            type="number"
-            value={maxCantidadGrupos}
-            onChange={(e) => setMaxCantidadGrupos(Number(e.target.value))}
-            min={minCantidadGrupos}
-            style={{
-              padding: '8px 12px',
-              border: '1px solid #ccc',
-              borderRadius: '4px',
-              fontSize: '16px',
-              width: '100px'
-            }}
-          />
-          {(tutoresCount > 0 || alumnosCount > 0) && maxCantidadGrupos > Math.min(tutoresCount || Infinity, alumnosCount || Infinity) && (
-            <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 0.5 }}>
-              ⚠️ Máximo {Math.min(tutoresCount || Infinity, alumnosCount || Infinity)} grupos
-              (limitado por {tutoresCount <= alumnosCount ? 'tutores' : 'alumnos'}: {Math.min(tutoresCount || Infinity, alumnosCount || Infinity)})
-            </Typography>
-          )}
-        </Box>
-        <Box>
-          <Typography variant="body1" sx={{ mb: 1 }}>
-            Máximos Alumnos por Grupo
-          </Typography>
-          <input
-            type="number"
-            value={maximosAlumnosPorGrupo}
-            onChange={(e) => setMaximosAlumnosPorGrupo(Number(e.target.value))}
-            style={{
-              padding: '8px 12px',
-              border: '1px solid #ccc',
-              borderRadius: '4px',
-              fontSize: '16px',
-              width: '100px'
-            }}
-          />
-        </Box>
-        <Box>
-          <Typography variant="body1" sx={{ mb: 1 }}>
-            Peso relativo tutores
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 1 }}>
-            {pesoRelativoTutores.map((peso: number, index: number) => (
-              <Box key={index}>
-                <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>
-                  Tutor {index + 1}
-                </Typography>
-                <input
-                  type="number"
-                  value={peso}
-                  onChange={(e) => handlePesoChange(index, e.target.value)}
-                  style={{
-                    padding: '8px 12px',
-                    border: '1px solid #ccc',
-                    borderRadius: '4px',
-                    fontSize: '16px',
-                    width: '60px'
-                  }}
-                />
-              </Box>
-            ))}
-          </Box>
-        </Box>
-        <Box>
-          <Typography variant="body1" sx={{ mb: 1 }}>
-            Sensibilidad de coincidencia de nombres: {(similarityThreshold * 100).toFixed(0)}%
-          </Typography>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Typography variant="caption">Estricto</Typography>
-            <input
-              type="range"
-              min="0"
-              max="100"
-              value={similarityThreshold * 100}
-              onChange={(e) => setSimilarityThreshold(Number(e.target.value) / 100)}
-              style={{
-                width: '300px',
-                cursor: 'pointer'
-              }}
-            />
-            <Typography variant="caption">Flexible</Typography>
-          </Box>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-            0% = Solo coincidencias exactas | 100% = Acepta variaciones (acentos, abreviaciones)
-          </Typography>
-        </Box>
-      </Box>
-
-      {/* Genetic Algorithm Parameters */}
-      <Box sx={{ mt: 4 }}>
-        <Typography variant="h6" fontWeight={600} sx={{ mb: 2 }}>
-          Parámetros del Algoritmo Genético
-        </Typography>
-
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 3, maxWidth: 800 }}>
-          <Box>
-            <Typography variant="body1" sx={{ mb: 1 }}>
-              Semilla (Seed): {seed}
-            </Typography>
-            <input
-              type="number"
-              value={seed}
-              onChange={(e) => setSeed(Number(e.target.value))}
-              style={{
-                padding: '8px 12px',
-                border: '1px solid #ccc',
-                borderRadius: '4px',
-                fontSize: '16px',
-                width: '150px'
-              }}
-            />
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-              Para resultados reproducibles
-            </Typography>
-          </Box>
-
-          <Box>
-            <Typography variant="body1" sx={{ mb: 1 }}>
-              Iteraciones: {geneticIterations}
-            </Typography>
-            <input
-              type="range"
-              min="10"
-              max="500"
-              value={geneticIterations}
-              onChange={(e) => setGeneticIterations(Number(e.target.value))}
-              style={{ width: '200px', cursor: 'pointer' }}
-            />
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-              Más iteraciones = mejor solución pero más lento
-            </Typography>
-          </Box>
-
-          <Box>
-            <Typography variant="body1" sx={{ mb: 1 }}>
-              Tamaño de Población: {populationSize}
-            </Typography>
-            <input
-              type="range"
-              min="10"
-              max="200"
-              value={populationSize}
-              onChange={(e) => setPopulationSize(Number(e.target.value))}
-              style={{ width: '200px', cursor: 'pointer' }}
-            />
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-              Más población = más diversidad
-            </Typography>
-          </Box>
-
-          <Box>
-            <Typography variant="body1" sx={{ mb: 1 }}>
-              Tasa de Mutación: {(mutationRate * 100).toFixed(0)}%
-            </Typography>
-            <input
-              type="range"
-              min="1"
-              max="30"
-              value={mutationRate * 100}
-              onChange={(e) => setMutationRate(Number(e.target.value) / 100)}
-              style={{ width: '200px', cursor: 'pointer' }}
-            />
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-              5-20% típico (previene convergencia prematura)
-            </Typography>
-          </Box>
-
-          <Box>
-            <Typography variant="body1" sx={{ mb: 1 }}>
-              Tasa de Cruce: {(crossoverRate * 100).toFixed(0)}%
-            </Typography>
-            <input
-              type="range"
-              min="50"
-              max="95"
-              value={crossoverRate * 100}
-              onChange={(e) => setCrossoverRate(Number(e.target.value) / 100)}
-              style={{ width: '200px', cursor: 'pointer' }}
-            />
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-              60-90% típico (mezcla de soluciones)
-            </Typography>
-          </Box>
-
-          <Box>
-            <Typography variant="body1" sx={{ mb: 1 }}>
-              Tamaño del Torneo: {tournamentSize}
-            </Typography>
-            <input
-              type="range"
-              min="2"
-              max="10"
-              value={tournamentSize}
-              onChange={(e) => setTournamentSize(Number(e.target.value))}
-              style={{ width: '200px', cursor: 'pointer' }}
-            />
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-              2-3 exploración, 4-5 explotación
-            </Typography>
-          </Box>
-
-          <Box>
-            <Typography variant="body1" sx={{ mb: 1 }}>
-              Elitismo: {elitismCount} individuos
-            </Typography>
-            <input
-              type="range"
-              min="0"
-              max="10"
-              value={elitismCount}
-              onChange={(e) => setElitismCount(Number(e.target.value))}
-              style={{ width: '200px', cursor: 'pointer' }}
-            />
-            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-              Mejores individuos que pasan sin cambios
-            </Typography>
-          </Box>
-
-          <Box>
-            <Typography variant="body1" sx={{ mb: 1 }}>
-              Complejidad Total: {(populationSize * geneticIterations).toLocaleString()}
-            </Typography>
-            <Typography variant="caption" color={populationSize * geneticIterations > 100000 ? 'warning.main' : 'text.secondary'} sx={{ display: 'block' }}>
-              {populationSize * geneticIterations < 10000 ? 'Rápido' :
-               populationSize * geneticIterations < 50000 ? 'Normal' :
-               populationSize * geneticIterations < 100000 ? 'Lento' : 'Muy lento'}
-            </Typography>
-          </Box>
-        </Box>
-      </Box>
-    </Box>;
-  };
-
   const Resultados = () => {
     // Uses the shared calculateMatchScore function
 
@@ -1667,8 +1640,6 @@ const Maraton = () => {
     </Box>;
   };
 
-
-
   return <>
     <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
       <Tabs value={maratonTab} onChange={(_e: SyntheticEvent, v) => setMaratonTab(v)}>
@@ -1680,42 +1651,15 @@ const Maraton = () => {
       <CustomTabPanel value={maratonTab} index={"Alumnos"} children={<Alumnos />} />
       <CustomTabPanel value={maratonTab} index={"Parámetros"} children={
         <Parametros
-          minCantidadGrupos={minCantidadGrupos}
-          setMinCantidadGrupos={setMinCantidadGrupos}
-          maxCantidadGrupos={maxCantidadGrupos}
-          setMaxCantidadGrupos={setMaxCantidadGrupos}
-          maximosAlumnosPorGrupo={maximosAlumnosPorGrupo}
-          setMaximosAlumnosPorGrupo={setMaximosAlumnosPorGrupo}
-          pesoRelativoTutores={pesoRelativoTutores}
-          setPesoRelativoTutores={setPesoRelativoTutores}
-          similarityThreshold={similarityThreshold}
-          setSimilarityThreshold={setSimilarityThreshold}
-          seed={seed}
-          setSeed={setSeed}
-          geneticIterations={geneticIterations}
-          setGeneticIterations={setGeneticIterations}
-          populationSize={populationSize}
-          setPopulationSize={setPopulationSize}
-          mutationRate={mutationRate}
-          setMutationRate={setMutationRate}
-          crossoverRate={crossoverRate}
-          setCrossoverRate={setCrossoverRate}
-          tournamentSize={tournamentSize}
-          setTournamentSize={setTournamentSize}
-          elitismCount={elitismCount}
-          setElitismCount={setElitismCount}
-          onRecalculate={handleRecalculate}
           canRecalculate={alumnosData.length > 0 && tutoresData.length > 0}
-          tutoresCount={tutoresData.length}
-          alumnosCount={alumnosData.length}
+          tutoresData={tutoresData}
+          alumnosData={alumnosData}
         />
       } />
       <CustomTabPanel value={maratonTab} index={"Resultados"} children={<Resultados />} />
     </Box>
   </>;
 };
-
-
 
 const drawerWidth = 240;
 

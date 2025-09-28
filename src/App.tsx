@@ -1,6 +1,5 @@
 import { useState, useEffect, type SyntheticEvent } from 'react'
 import './App.css'
-import { main } from './theme'
 
 import * as React from 'react';
 import { Box, Button, Divider, Drawer, IconButton, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Tab, Tabs, Typography } from '@mui/material';
@@ -39,7 +38,7 @@ const Tutorias = () => {
 };
 
 const Maraton = () => {
-  const tabs = ['Tutores', 'Alumnos', 'Parámetros', 'Resultados', 'Análisis'];
+  const tabs = ['Tutores', 'Alumnos', 'Parámetros', 'Resultados'];
   const [maratonTab, setMaratonTab] = useState('Tutores');
 
   const [alumnosFile, setAlumnosFile] = useState<File | null>(null);
@@ -48,6 +47,15 @@ const Maraton = () => {
   const [tutoresData, setTutoresData] = useState<any[]>([]);
   const [alumnosColumns, setAlumnosColumns] = useState<GridColDef[]>([]);
   const [tutoresColumns, setTutoresColumns] = useState<GridColDef[]>([]);
+
+  // Genetic Algorithm parameters
+  const [seed, setSeed] = useState(42);
+  const [geneticIterations, setGeneticIterations] = useState(100);
+  const [populationSize, setPopulationSize] = useState(50);
+  const [mutationRate, setMutationRate] = useState(0.1);
+  const [crossoverRate, setCrossoverRate] = useState(0.7);
+  const [tournamentSize, setTournamentSize] = useState(3);
+  const [elitismCount, setElitismCount] = useState(2);
 
   // Parameters state
   const [minCantidadGrupos, setMinCantidadGrupos] = useState(3);
@@ -68,15 +76,47 @@ const Maraton = () => {
     'Nombre', 'Apellido'
   ];
 
-  // Trigger optimization only when both CSVs are initially loaded
-  const [hasRunInitialOptimization, setHasRunInitialOptimization] = useState(false);
+  // Shared function to calculate match score for a student (counts ALL tutor preferences in maxScore)
+  const calculateMatchScore = (alumno: any, groupTutors: string[]) => {
+    let score = 0;
+    let maxScore = 0;
 
-  useEffect(() => {
-    if (alumnosData.length > 0 && tutoresData.length > 0 && !hasRunInitialOptimization) {
-      createOptimalGroups();
-      setHasRunInitialOptimization(true);
+    // Check each tutor preference - count ALL preferences in maxScore (even non-existent tutors)
+    for (let i = 1; i <= 5; i++) {
+      const tutorPref = alumno[`Tutor${i}`];
+      if (tutorPref && tutorPref.trim()) { // Count any non-empty preference
+        const weight = pesoRelativoTutores[i - 1] || 0;
+        maxScore += weight; // Count ALL tutor preferences regardless of validity
+
+        // Only give score points if tutor exists AND is in the group
+        let tutorExistsInDatabase = false;
+        if (tutoresData && tutoresData.length > 0) {
+          const validTutorNames = tutoresData.map(t => `${t.Nombre} ${t.Apellido}`);
+          for (const validTutor of validTutorNames) {
+            const similarity = calculateSimilarity(tutorPref, validTutor);
+            const threshold = 1.0 - similarityThreshold;
+            if (similarity >= threshold) {
+              tutorExistsInDatabase = true;
+              break;
+            }
+          }
+        }
+
+        // Only give credit if tutor exists in database AND is in the group
+        if (tutorExistsInDatabase) {
+          for (const groupTutor of groupTutors) {
+            const similarity = calculateSimilarity(tutorPref, groupTutor);
+            if (similarity >= (1.0 - similarityThreshold)) {
+              score += weight;
+              break;
+            }
+          }
+        }
+      }
     }
-  }, [alumnosData, tutoresData, hasRunInitialOptimization]);
+
+    return { score, maxScore };
+  };
 
   // Algorithm to create optimal groups
   const createOptimalGroups = () => {
@@ -84,65 +124,6 @@ const Maraton = () => {
 
     console.log('Starting group optimization...');
     console.log(`Testing group counts from ${minCantidadGrupos} to ${maxCantidadGrupos}`);
-
-    // Levenshtein distance algorithm for fuzzy matching
-    const levenshteinDistance = (str1: string, str2: string): number => {
-      const m = str1.length;
-      const n = str2.length;
-      const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
-
-      for (let i = 0; i <= m; i++) dp[i][0] = i;
-      for (let j = 0; j <= n; j++) dp[0][j] = j;
-
-      for (let i = 1; i <= m; i++) {
-        for (let j = 1; j <= n; j++) {
-          if (str1[i - 1] === str2[j - 1]) {
-            dp[i][j] = dp[i - 1][j - 1];
-          } else {
-            dp[i][j] = Math.min(
-              dp[i - 1][j] + 1,    // deletion
-              dp[i][j - 1] + 1,    // insertion
-              dp[i - 1][j - 1] + 1 // substitution
-            );
-          }
-        }
-      }
-      return dp[m][n];
-    };
-
-    // Calculate similarity score between two strings
-    const calculateSimilarity = (str1: string, str2: string): number => {
-      if (!str1 || !str2) return 0;
-
-      const normalizedStr1 = normalizeName(str1);
-      const normalizedStr2 = normalizeName(str2);
-
-      // Exact match after normalization
-      if (normalizedStr1 === normalizedStr2) return 1.0;
-
-      // Calculate Levenshtein similarity
-      const maxLen = Math.max(normalizedStr1.length, normalizedStr2.length);
-      if (maxLen === 0) return 1.0;
-
-      const distance = levenshteinDistance(normalizedStr1, normalizedStr2);
-      const similarity = 1 - (distance / maxLen);
-
-      return Math.max(0, similarity);
-    };
-
-    // Normalize tutor names for matching
-    const normalizeName = (name: string) => {
-      if (!name) return '';
-      return name.toLowerCase()
-        .replace(/á/g, 'a')
-        .replace(/é/g, 'e')
-        .replace(/í/g, 'i')
-        .replace(/ó/g, 'o')
-        .replace(/ú/g, 'u')
-        .replace(/ñ/g, 'n')
-        .replace(/\s+/g, ' ')
-        .trim();
-    };
 
     // Create tutor full names for matching
     const tutorFullNames = tutoresData.map(t => ({
@@ -163,34 +144,51 @@ const Maraton = () => {
 
         const weight = pesoRelativoTutores[i - 1] || 0;
 
-        // Check if this tutor is in the group using similarity threshold
-        let maxSimilarity = 0;
-
-        for (const groupTutor of groupTutors) {
-          const similarity = calculateSimilarity(tutorPref, groupTutor);
-
-          // Special handling for abbreviations
-          const prefParts = normalizeName(tutorPref).split(' ');
-          const gtParts = normalizeName(groupTutor).split(' ');
-
-          // Check if it's an abbreviation match (e.g., "r. hernandez" matches "roberto hernandez")
-          if (prefParts.length >= 2 && gtParts.length >= 2) {
-            const lastNameMatch = prefParts[prefParts.length - 1] === gtParts[gtParts.length - 1];
-            const firstInitialMatch = prefParts[0].charAt(0) === gtParts[0].charAt(0);
-            if (lastNameMatch && prefParts[0].length <= 2 && firstInitialMatch) {
-              // Remove abbreviation boost to match warning system - do nothing
-            }
-          }
-
-          if (similarity > maxSimilarity) {
-            maxSimilarity = similarity;
+        // First check if this tutor preference is valid (exists in database)
+        let tutorExistsInDatabase = false;
+        const validTutorNames = tutorFullNames.map(t => t.original);
+        for (const validTutor of validTutorNames) {
+          const similarity = calculateSimilarity(tutorPref, validTutor);
+          const threshold = 1.0 - similarityThreshold;
+          if (similarity >= threshold) {
+            tutorExistsInDatabase = true;
+            break;
           }
         }
 
-        // Apply strict threshold: only exact matches (like warning system)
-        const adjustedThreshold = 1.0 - similarityThreshold; // Invert so slider is intuitive
-        if (maxSimilarity >= adjustedThreshold) {
-          score += weight; // Give full weight for valid matches only
+        // Only give credit if tutor exists in database AND is in the group
+        if (tutorExistsInDatabase) {
+          // Check if this valid tutor is in the group
+          let maxSimilarity = 0;
+
+          for (const groupTutor of groupTutors) {
+            const similarity = calculateSimilarity(tutorPref, groupTutor);
+
+            // Special handling for abbreviations
+            const prefParts = normalizeName(tutorPref).split(' ');
+            const gtParts = normalizeName(groupTutor).split(' ');
+
+            // Check if it's an abbreviation match (e.g., "r. hernandez" matches "roberto hernandez")
+            if (prefParts.length >= 2 && gtParts.length >= 2) {
+              const lastNameMatch = prefParts[prefParts.length - 1] === gtParts[gtParts.length - 1];
+              const firstInitialMatch = prefParts[0].charAt(0) === gtParts[0].charAt(0);
+              if (lastNameMatch && prefParts[0].length <= 2 && firstInitialMatch) {
+                // Boost similarity for abbreviation matches
+                maxSimilarity = Math.max(maxSimilarity, 0.95);
+                continue;
+              }
+            }
+
+            if (similarity > maxSimilarity) {
+              maxSimilarity = similarity;
+            }
+          }
+
+          // Give credit when tutor is in the group
+          const threshold = 1.0 - similarityThreshold;
+          if (maxSimilarity >= threshold) {
+            score += weight;
+          }
         }
       }
 
@@ -219,18 +217,22 @@ const Maraton = () => {
             }
           }
 
-          // If similarity is below threshold, it's likely a typo or non-existent tutor
+          // Show warnings for similarities below threshold
           const threshold = 1.0 - similarityThreshold;
           if (bestSimilarity < threshold) {
-            warnings.push(
-              `"${alumno.Nombre} ${alumno.Apellido}" seleccionó "${tutorPref}" (Tutor${i}) que no coincide con ningún tutor disponible`
-            );
-          } else if (bestSimilarity < 1.0) {
-            // Close match but not exact - might be a typo
-            warnings.push(
-              `"${alumno.Nombre} ${alumno.Apellido}" seleccionó "${tutorPref}" (Tutor${i}) - ¿querías decir "${bestMatch}"? (${(bestSimilarity * 100).toFixed(0)}% coincidencia)`
-            );
+            if (bestSimilarity > 0.5) {
+              // Close match but below threshold - might be a typo
+              warnings.push(
+                `"${alumno.Nombre} ${alumno.Apellido}" seleccionó "${tutorPref}" (Tutor${i}) - ¿querías decir "${bestMatch}"? (${(bestSimilarity * 100).toFixed(0)}% coincidencia)`
+              );
+            } else {
+              // Very low similarity - likely non-existent tutor
+              warnings.push(
+                `"${alumno.Nombre} ${alumno.Apellido}" seleccionó "${tutorPref}" (Tutor${i}) que no coincide con ningún tutor disponible`
+              );
+            }
           }
+          // Note: abbreviations with 95% similarity won't show warnings with 80% threshold
         }
       });
 
@@ -330,7 +332,9 @@ const Maraton = () => {
           if (group && group.alumnos.length < group.maxCapacity) {
             group.alumnos.push(alumno);
             assignedAlumnos.add(alumno.id);
-            totalScore += score;
+            // Use calculateMatchScore to ensure consistent calculation with Satisfacción Promedio
+            const { score: matchScore } = calculateMatchScore(alumno, group.tutores);
+            totalScore += matchScore;
 
             assignments.push({
               alumnoName: `${alumno.Nombre} ${alumno.Apellido}`,
@@ -510,12 +514,10 @@ const Maraton = () => {
           setAlumnosFile(file);
           setAlumnosData(data);
           setAlumnosColumns(columns);
-          setHasRunInitialOptimization(false);
         } else {
           setTutoresFile(file);
           setTutoresData(data);
           setTutoresColumns(columns);
-          setHasRunInitialOptimization(false);
         }
       };
       reader.readAsText(file);
@@ -533,55 +535,35 @@ const Maraton = () => {
     document.body.removeChild(link);
   };
 
-  const Alumnos = () => {
-    return <Box sx={{ p: 3, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h5" fontWeight={600}>Gestión de Alumnos ({alumnosData.length} registros)</Typography>
-        {alumnosFile && (
-          <Box sx={{ color: 'info.main', borderRadius: 1 }}>
-            <Typography variant="body1">{alumnosFile.name}</Typography>
-          </Box>
-        )}
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          <Button
-            component="label"
-            variant="contained"
-            startIcon={<UploadFileIcon />}
-          >
-            Subir CSV
-            <input
-              type="file"
-              accept=".csv"
-              onChange={(e) => handleFileUpload(e, 'alumnos')}
-              hidden
-            />
-          </Button>
-          <Button
-            variant="outlined"
-            startIcon={<DownloadIcon />}
-            onClick={() => downloadExampleCSV('alumnos')}
-          >
-            Descargar Plantilla
-          </Button>
-        </Box>
-      </Box>
-
-      {alumnosData.length > 0 && (
-        <Box sx={{ flex: 1, minHeight: 0 }}>
-          <DataGrid
-            density="compact"
-            rows={alumnosData}
-            columns={alumnosColumns}
-            initialState={{
-              pagination: {
-                paginationModel: { pageSize: 100 },
-              },
-            }}
-          />
-        </Box>
-      )}
-    </Box>;
-  };
+    const handleRecalculate = () => {
+      console.log('Handle Recalculate triggered');
+      console.log({
+        dataStatus: {
+          alumnosCount: alumnosData.length,
+          tutoresCount: tutoresData.length
+        },
+        assignmentParams: {
+          minCantidadGrupos,
+          maxCantidadGrupos,
+          maximosAlumnosPorGrupo,
+          similarityThreshold,
+          pesoRelativoTutores
+        },
+        geneticParams: {
+          seed,
+          geneticIterations,
+          populationSize,
+          mutationRate,
+          crossoverRate,
+          tournamentSize,
+          elitismCount
+        }
+      });
+    if (alumnosData.length === 0 || tutoresData.length === 0) {
+      alert('Por favor, carga los archivos CSV de tutores y alumnos antes de recalcular.');
+      return;
+    }
+  }
 
   const Tutores = () => {
     return <Box sx={{ p: 3, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
@@ -632,79 +614,366 @@ const Maraton = () => {
       )}
     </Box>
   };
+  const Alumnos = () => {
+    return <Box sx={{ p: 3, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h5" fontWeight={600}>Gestión de Alumnos ({alumnosData.length} registros)</Typography>
+        {alumnosFile && (
+          <Box sx={{ color: 'info.main', borderRadius: 1 }}>
+            <Typography variant="body1">{alumnosFile.name}</Typography>
+          </Box>
+        )}
+        <Box sx={{ display: 'flex', gap: 2 }}>
+          <Button
+            component="label"
+            variant="contained"
+            startIcon={<UploadFileIcon />}
+          >
+            Subir CSV
+            <input
+              type="file"
+              accept=".csv"
+              onChange={(e) => handleFileUpload(e, 'alumnos')}
+              hidden
+            />
+          </Button>
+          <Button
+            variant="outlined"
+            startIcon={<DownloadIcon />}
+            onClick={() => downloadExampleCSV('alumnos')}
+          >
+            Descargar Plantilla
+          </Button>
+        </Box>
+      </Box>
 
-  // Handler for recalculation
-  const handleRecalculate = () => {
-    if (alumnosData.length > 0 && tutoresData.length > 0) {
-      createOptimalGroups();
-      // Switch to results tab to show updated results
-      setMaratonTab('Resultados');
-    } else {
-      alert('Por favor, carga primero los archivos CSV de alumnos y tutores');
-    }
+      {alumnosData.length > 0 && (
+        <Box sx={{ flex: 1, minHeight: 0 }}>
+          <DataGrid
+            density="compact"
+            rows={alumnosData}
+            columns={alumnosColumns}
+            initialState={{
+              pagination: {
+                paginationModel: { pageSize: 100 },
+              },
+            }}
+          />
+        </Box>
+      )}
+    </Box>;
+  };
+
+  const Parametros = ({
+    minCantidadGrupos,
+    setMinCantidadGrupos,
+    maxCantidadGrupos,
+    setMaxCantidadGrupos,
+    maximosAlumnosPorGrupo,
+    setMaximosAlumnosPorGrupo,
+    pesoRelativoTutores,
+    setPesoRelativoTutores,
+    similarityThreshold,
+    setSimilarityThreshold,
+    seed,
+    setSeed,
+    geneticIterations,
+    setGeneticIterations,
+    populationSize,
+    setPopulationSize,
+    mutationRate,
+    setMutationRate,
+    crossoverRate,
+    setCrossoverRate,
+    tournamentSize,
+    setTournamentSize,
+    elitismCount,
+    setElitismCount,
+    onRecalculate,
+    canRecalculate,
+    tutoresCount,
+    alumnosCount
+  }: any) => {
+    const handlePesoChange = (index: number, value: string) => {
+      setPesoRelativoTutores((prev: number[]) => {
+        const newPesos = [...prev];
+        newPesos[index] = Number(value);
+        return newPesos;
+      });
+    };
+
+    return <Box sx={{ p: 3 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+        <Typography variant="h5" fontWeight={600}>
+          Parámetros de la Maratón
+        </Typography>
+        <Button
+          variant="contained"
+          onClick={onRecalculate}
+          disabled={!canRecalculate}
+          sx={{ bgcolor: 'primary.main' }}
+        >
+          Recalcular Grupos
+        </Button>
+      </Box>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, maxWidth: 400 }}>
+        <Box>
+          <Typography variant="body1" sx={{ mb: 1 }}>
+            Mínima Cantidad de Grupos
+          </Typography>
+          <input
+            type="number"
+            value={minCantidadGrupos}
+            onChange={(e) => setMinCantidadGrupos(Number(e.target.value))}
+            min="1"
+            style={{
+              padding: '8px 12px',
+              border: '1px solid #ccc',
+              borderRadius: '4px',
+              fontSize: '16px',
+              width: '100px'
+            }}
+          />
+        </Box>
+        <Box>
+          <Typography variant="body1" sx={{ mb: 1 }}>
+            Máxima Cantidad de Grupos
+          </Typography>
+          <input
+            type="number"
+            value={maxCantidadGrupos}
+            onChange={(e) => setMaxCantidadGrupos(Number(e.target.value))}
+            min={minCantidadGrupos}
+            style={{
+              padding: '8px 12px',
+              border: '1px solid #ccc',
+              borderRadius: '4px',
+              fontSize: '16px',
+              width: '100px'
+            }}
+          />
+          {(tutoresCount > 0 || alumnosCount > 0) && maxCantidadGrupos > Math.min(tutoresCount || Infinity, alumnosCount || Infinity) && (
+            <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 0.5 }}>
+              ⚠️ Máximo {Math.min(tutoresCount || Infinity, alumnosCount || Infinity)} grupos
+              (limitado por {tutoresCount <= alumnosCount ? 'tutores' : 'alumnos'}: {Math.min(tutoresCount || Infinity, alumnosCount || Infinity)})
+            </Typography>
+          )}
+        </Box>
+        <Box>
+          <Typography variant="body1" sx={{ mb: 1 }}>
+            Máximos Alumnos por Grupo
+          </Typography>
+          <input
+            type="number"
+            value={maximosAlumnosPorGrupo}
+            onChange={(e) => setMaximosAlumnosPorGrupo(Number(e.target.value))}
+            style={{
+              padding: '8px 12px',
+              border: '1px solid #ccc',
+              borderRadius: '4px',
+              fontSize: '16px',
+              width: '100px'
+            }}
+          />
+        </Box>
+        <Box>
+          <Typography variant="body1" sx={{ mb: 1 }}>
+            Peso relativo tutores
+          </Typography>
+          <Box sx={{ display: 'flex', gap: 1 }}>
+            {pesoRelativoTutores.map((peso: number, index: number) => (
+              <Box key={index}>
+                <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>
+                  Tutor {index + 1}
+                </Typography>
+                <input
+                  type="number"
+                  value={peso}
+                  onChange={(e) => handlePesoChange(index, e.target.value)}
+                  style={{
+                    padding: '8px 12px',
+                    border: '1px solid #ccc',
+                    borderRadius: '4px',
+                    fontSize: '16px',
+                    width: '60px'
+                  }}
+                />
+              </Box>
+            ))}
+          </Box>
+        </Box>
+        <Box>
+          <Typography variant="body1" sx={{ mb: 1 }}>
+            Sensibilidad de coincidencia de nombres: {(similarityThreshold * 100).toFixed(0)}%
+          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Typography variant="caption">Estricto</Typography>
+            <input
+              type="range"
+              min="0"
+              max="100"
+              value={similarityThreshold * 100}
+              onChange={(e) => setSimilarityThreshold(Number(e.target.value) / 100)}
+              style={{
+                width: '300px',
+                cursor: 'pointer'
+              }}
+            />
+            <Typography variant="caption">Flexible</Typography>
+          </Box>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+            0% = Solo coincidencias exactas | 100% = Acepta variaciones (acentos, abreviaciones)
+          </Typography>
+        </Box>
+      </Box>
+
+      {/* Genetic Algorithm Parameters */}
+      <Box sx={{ mt: 4 }}>
+        <Typography variant="h6" fontWeight={600} sx={{ mb: 2 }}>
+          Parámetros del Algoritmo Genético
+        </Typography>
+
+        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 3, maxWidth: 800 }}>
+          <Box>
+            <Typography variant="body1" sx={{ mb: 1 }}>
+              Semilla (Seed): {seed}
+            </Typography>
+            <input
+              type="number"
+              value={seed}
+              onChange={(e) => setSeed(Number(e.target.value))}
+              style={{
+                padding: '8px 12px',
+                border: '1px solid #ccc',
+                borderRadius: '4px',
+                fontSize: '16px',
+                width: '150px'
+              }}
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+              Para resultados reproducibles
+            </Typography>
+          </Box>
+
+          <Box>
+            <Typography variant="body1" sx={{ mb: 1 }}>
+              Iteraciones: {geneticIterations}
+            </Typography>
+            <input
+              type="range"
+              min="10"
+              max="500"
+              value={geneticIterations}
+              onChange={(e) => setGeneticIterations(Number(e.target.value))}
+              style={{ width: '200px', cursor: 'pointer' }}
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+              Más iteraciones = mejor solución pero más lento
+            </Typography>
+          </Box>
+
+          <Box>
+            <Typography variant="body1" sx={{ mb: 1 }}>
+              Tamaño de Población: {populationSize}
+            </Typography>
+            <input
+              type="range"
+              min="10"
+              max="200"
+              value={populationSize}
+              onChange={(e) => setPopulationSize(Number(e.target.value))}
+              style={{ width: '200px', cursor: 'pointer' }}
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+              Más población = más diversidad
+            </Typography>
+          </Box>
+
+          <Box>
+            <Typography variant="body1" sx={{ mb: 1 }}>
+              Tasa de Mutación: {(mutationRate * 100).toFixed(0)}%
+            </Typography>
+            <input
+              type="range"
+              min="1"
+              max="30"
+              value={mutationRate * 100}
+              onChange={(e) => setMutationRate(Number(e.target.value) / 100)}
+              style={{ width: '200px', cursor: 'pointer' }}
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+              5-20% típico (previene convergencia prematura)
+            </Typography>
+          </Box>
+
+          <Box>
+            <Typography variant="body1" sx={{ mb: 1 }}>
+              Tasa de Cruce: {(crossoverRate * 100).toFixed(0)}%
+            </Typography>
+            <input
+              type="range"
+              min="50"
+              max="95"
+              value={crossoverRate * 100}
+              onChange={(e) => setCrossoverRate(Number(e.target.value) / 100)}
+              style={{ width: '200px', cursor: 'pointer' }}
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+              60-90% típico (mezcla de soluciones)
+            </Typography>
+          </Box>
+
+          <Box>
+            <Typography variant="body1" sx={{ mb: 1 }}>
+              Tamaño del Torneo: {tournamentSize}
+            </Typography>
+            <input
+              type="range"
+              min="2"
+              max="10"
+              value={tournamentSize}
+              onChange={(e) => setTournamentSize(Number(e.target.value))}
+              style={{ width: '200px', cursor: 'pointer' }}
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+              2-3 exploración, 4-5 explotación
+            </Typography>
+          </Box>
+
+          <Box>
+            <Typography variant="body1" sx={{ mb: 1 }}>
+              Elitismo: {elitismCount} individuos
+            </Typography>
+            <input
+              type="range"
+              min="0"
+              max="10"
+              value={elitismCount}
+              onChange={(e) => setElitismCount(Number(e.target.value))}
+              style={{ width: '200px', cursor: 'pointer' }}
+            />
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+              Mejores individuos que pasan sin cambios
+            </Typography>
+          </Box>
+
+          <Box>
+            <Typography variant="body1" sx={{ mb: 1 }}>
+              Complejidad Total: {(populationSize * geneticIterations).toLocaleString()}
+            </Typography>
+            <Typography variant="caption" color={populationSize * geneticIterations > 100000 ? 'warning.main' : 'text.secondary'} sx={{ display: 'block' }}>
+              {populationSize * geneticIterations < 10000 ? 'Rápido' :
+               populationSize * geneticIterations < 50000 ? 'Normal' :
+               populationSize * geneticIterations < 100000 ? 'Lento' : 'Muy lento'}
+            </Typography>
+          </Box>
+        </Box>
+      </Box>
+    </Box>;
   };
 
   const Resultados = () => {
-    // Helper function to calculate match score for a student
-    const calculateMatchScore = (alumno: any, groupTutors: string[]) => {
-      let score = 0;
-      let maxScore = 0;
-
-      // Normalize function
-      const normalizeName = (name: string) => {
-        if (!name) return '';
-        return name.toLowerCase()
-          .replace(/á/g, 'a')
-          .replace(/é/g, 'e')
-          .replace(/í/g, 'i')
-          .replace(/ó/g, 'o')
-          .replace(/ú/g, 'u')
-          .replace(/ñ/g, 'n')
-          .replace(/\s+/g, ' ')
-          .trim();
-      };
-
-      // Calculate similarity between two strings
-      const calculateSimilarity = (str1: string, str2: string): number => {
-        if (!str1 || !str2) return 0;
-        const norm1 = normalizeName(str1);
-        const norm2 = normalizeName(str2);
-        if (norm1 === norm2) return 1.0;
-
-        // Check for abbreviation match
-        const parts1 = norm1.split(' ');
-        const parts2 = norm2.split(' ');
-        if (parts1.length >= 2 && parts2.length >= 2) {
-          const lastNameMatch = parts1[parts1.length - 1] === parts2[parts2.length - 1];
-          const firstInitialMatch = parts1[0].charAt(0) === parts2[0].charAt(0);
-          if (lastNameMatch && parts1[0].length <= 2 && firstInitialMatch) {
-            return 0; // No abbreviation matching - strict only
-          }
-        }
-
-        return 0;
-      };
-
-      // Check each tutor preference
-      for (let i = 1; i <= 5; i++) {
-        const tutorPref = alumno[`Tutor${i}`];
-        if (tutorPref) {
-          const weight = pesoRelativoTutores[i - 1] || 0;
-          maxScore += weight;
-
-          // Check if this tutor is in the group
-          for (const groupTutor of groupTutors) {
-            const similarity = calculateSimilarity(tutorPref, groupTutor);
-            if (similarity >= (1.0 - similarityThreshold)) {
-              score += weight;
-              break;
-            }
-          }
-        }
-      }
-
-      return { score, maxScore };
-    };
+    // Uses the shared calculateMatchScore function
 
     // Function to generate and download CSV
     const downloadResultsAsCSV = () => {
@@ -875,68 +1144,67 @@ const Maraton = () => {
         </Box>
       </Box>
 
-      {/* Tutor Warnings */}
-      {assignmentResults.tutorWarnings && assignmentResults.tutorWarnings.length > 0 && (
-        <Box sx={{ mb: 3, bgcolor: '#ff980029', borderRadius: 1, border: '1px solid', borderColor: 'warning.main' }}>
-          <Box
-            sx={{
-              p: 2,
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              '&:hover': { bgcolor: '#ff980040' }
-            }}
-            onClick={() => {
-              const element = document.getElementById('tutor-warnings-content');
-              if (element) {
-                element.style.display = element.style.display === 'none' ? 'block' : 'none';
-              }
-              const arrow = document.getElementById('tutor-warnings-arrow');
-              if (arrow) {
-                arrow.style.transform = arrow.style.transform === 'rotate(180deg)' ? 'rotate(0deg)' : 'rotate(180deg)';
-              }
-            }}
-          >
-            <Typography variant="h6" sx={{ color: 'warning.dark' }}>
-              ⚠️ Advertencias de Tutores ({assignmentResults.tutorWarnings.length})
-            </Typography>
-            <Typography
-              id="tutor-warnings-arrow"
-              variant="h6"
-              sx={{
-                color: 'warning.dark',
-                transition: 'transform 0.2s',
-                userSelect: 'none'
-              }}
-            >
-              ▼
-            </Typography>
-          </Box>
-          <Box
-            id="tutor-warnings-content"
-            sx={{
-              p: 2,
-              pt: 0,
-              display: 'block'
-            }}
-          >
-            <Box sx={{ maxHeight: 200, overflow: 'auto' }}>
-              {assignmentResults.tutorWarnings.map((warning: string, index: number) => (
-                <Typography key={index} variant="body2" sx={{ mb: 1, color: 'warning.dark' }}>
-                  • {warning}
-                </Typography>
-              ))}
-            </Box>
-            <Typography variant="caption" sx={{ mt: 1, display: 'block', color: 'warning.dark' }}>
-              Estos tutores no fueron encontrados o tienen baja coincidencia. Verifica la ortografía en el archivo de alumnos.
-            </Typography>
-          </Box>
-        </Box>
-      )}
-
       {/* Groups Details */}
       <Box sx={{ flex: 1, overflow: 'auto' }}>
+        {/* Tutor Warnings */}
+        {assignmentResults.tutorWarnings && assignmentResults.tutorWarnings.length > 0 && (
+          <Box sx={{ mb: 3, bgcolor: '#ff980029', borderRadius: 1, border: '1px solid', borderColor: 'warning.main' }}>
+            <Box
+              sx={{
+                p: 2,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                '&:hover': { bgcolor: '#ff980040' }
+              }}
+              onClick={() => {
+                const element = document.getElementById('tutor-warnings-content');
+                if (element) {
+                  element.style.display = element.style.display === 'none' ? 'block' : 'none';
+                }
+                const arrow = document.getElementById('tutor-warnings-arrow');
+                if (arrow) {
+                  arrow.style.transform = arrow.style.transform === 'rotate(180deg)' ? 'rotate(0deg)' : 'rotate(180deg)';
+                }
+              }}
+            >
+              <Typography variant="h6" sx={{ color: 'warning.dark' }}>
+                ⚠️ Advertencias de Tutores ({assignmentResults.tutorWarnings.length})
+              </Typography>
+              <Typography
+                id="tutor-warnings-arrow"
+                variant="h6"
+                sx={{
+                  color: 'warning.dark',
+                  transition: 'transform 0.2s',
+                  userSelect: 'none'
+                }}
+              >
+                ▼
+              </Typography>
+            </Box>
+            <Box
+              id="tutor-warnings-content"
+              sx={{
+                p: 2,
+                pt: 0,
+                display: 'block'
+              }}
+            >
+              <Box>
+                {assignmentResults.tutorWarnings.map((warning: string, index: number) => (
+                  <Typography key={index} variant="body2" sx={{ mb: 1, color: 'warning.dark' }}>
+                    • {warning}
+                  </Typography>
+                ))}
+              </Box>
+              <Typography variant="caption" sx={{ mt: 1, display: 'block', color: 'warning.dark' }}>
+                Estos tutores no fueron encontrados o tienen baja coincidencia. Verifica la ortografía en el archivo de alumnos.
+              </Typography>
+            </Box>
+          </Box>
+        )}
         <Box sx={{
           border: '1px solid',
           borderColor: 'divider',
@@ -987,7 +1255,7 @@ const Maraton = () => {
               display: 'block'
             }}
           >
-            <Box sx={{ maxHeight: 400, overflow: 'auto', display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
               {assignmentResults.groups.map((group: any) => (
                 <Box key={group.id} sx={{
                   p: 2,
@@ -1109,7 +1377,7 @@ const Maraton = () => {
               display: 'block'
             }}
           >
-            <Box sx={{ maxHeight: 400, overflow: 'auto', mt: 2 }}>
+            <Box sx={{ mt: 2 }}>
               <Box sx={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 2fr', gap: 1, mb: 1, p: 1, bgcolor: 'grey.100', borderRadius: 0.5 }}>
                 <Typography variant="body2" fontWeight={600}>Nombre</Typography>
                 <Typography variant="body2" fontWeight={600}>Grupo</Typography>
@@ -1118,30 +1386,11 @@ const Maraton = () => {
               </Box>
               {(() => {
                 // Create ranking array
-                const studentRanking: Array<{name: string, group: string, satisfaction: number, tutorResults: Array<{name: string, status: 'matched' | 'not_matched' | 'not_found'}>}> = [];
+                const studentRanking: Array<{ name: string, group: string, satisfaction: number, tutorResults: Array<{ name: string, status: 'matched' | 'not_matched' | 'not_found' }> }> = [];
 
-                // Recreate the same tutorFullNames logic used in warnings validation (once, outside the loop)
-                const normalizeName = (name: string) => {
-                  if (!name) return '';
-                  return name.toLowerCase()
-                    .replace(/á/g, 'a')
-                    .replace(/é/g, 'e')
-                    .replace(/í/g, 'i')
-                    .replace(/ó/g, 'o')
-                    .replace(/ú/g, 'u')
-                    .replace(/ñ/g, 'n')
-                    .replace(/\s+/g, ' ')
-                    .trim();
-                };
+                // Uses the main normalizeName function
 
-                const calculateSimilarity = (str1: string, str2: string): number => {
-                  if (!str1 || !str2) return 0;
-                  const norm1 = normalizeName(str1);
-                  const norm2 = normalizeName(str2);
-                  if (norm1 === norm2) return 1.0;
-                  // Remove abbreviation matching to match warning system behavior
-                  return 0;
-                };
+                // Uses the main calculateSimilarity function
 
                 const tutorFullNames = tutoresData.map(t => ({
                   original: `${t.Nombre} ${t.Apellido}`,
@@ -1158,7 +1407,7 @@ const Maraton = () => {
                     const satisfaction = maxScore > 0 ? (score / maxScore) * 100 : 0;
 
                     // Calculate tutor matches with status
-                    const tutorResults: Array<{name: string, status: 'matched' | 'not_matched' | 'not_found'}> = [];
+                    const tutorResults: Array<{ name: string, status: 'matched' | 'not_matched' | 'not_found' }> = [];
 
                     for (let i = 1; i <= 5; i++) {
                       const tutorPref = alumno[`Tutor${i}`];
@@ -1192,11 +1441,11 @@ const Maraton = () => {
                         }
 
                         if (foundInGroup) {
-                          tutorResults.push({name: tutorPref, status: 'matched'});
+                          tutorResults.push({ name: tutorPref, status: 'matched' });
                         } else if (existsInDatabase) {
-                          tutorResults.push({name: tutorPref, status: 'not_matched'});
+                          tutorResults.push({ name: tutorPref, status: 'not_matched' });
                         } else {
-                          tutorResults.push({name: tutorPref, status: 'not_found'});
+                          tutorResults.push({ name: tutorPref, status: 'not_found' });
                         }
                       }
                     }
@@ -1227,9 +1476,9 @@ const Maraton = () => {
                     <Typography variant="body2">{student.group}</Typography>
                     <Typography variant="body2" sx={{
                       color: student.satisfaction >= 75 ? 'success.main' :
-                             student.satisfaction >= 50 ? '#FFC107' :
-                             student.satisfaction >= 25 ? 'warning.dark' :
-                             'error.main',
+                        student.satisfaction >= 50 ? '#FFC107' :
+                          student.satisfaction >= 25 ? 'warning.dark' :
+                            'error.main',
                       fontWeight: 600
                     }}>
                       {student.satisfaction.toFixed(1)}%
@@ -1247,8 +1496,8 @@ const Maraton = () => {
                             fontWeight: 500,
                             color: 'white',
                             bgcolor: tutor.status === 'matched' ? 'success.main' :
-                                    tutor.status === 'not_matched' ? 'warning.main' :
-                                    'error.main'
+                              tutor.status === 'not_matched' ? 'warning.main' :
+                                'error.main'
                           }}
                         >
                           {tutor.name}
@@ -1317,7 +1566,7 @@ const Maraton = () => {
               display: 'block'
             }}
           >
-            <Box sx={{ maxHeight: 400, overflow: 'auto', mt: 2 }}>
+            <Box sx={{ mt: 2 }}>
               <Box sx={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 1, mb: 1, p: 1, bgcolor: 'grey.100', borderRadius: 0.5 }}>
                 <Typography variant="body2" fontWeight={600}>Tutor</Typography>
                 <Typography variant="body2" fontWeight={600}>Selecciones</Typography>
@@ -1326,21 +1575,9 @@ const Maraton = () => {
               </Box>
               {(() => {
                 // Create tutor ranking data
-                const tutorStats: Array<{name: string, selected: number, matched: number, effectiveness: number}> = [];
+                const tutorStats: Array<{ name: string, selected: number, matched: number, effectiveness: number }> = [];
 
-                // Normalize function for name matching
-                const normalizeName = (name: string) => {
-                  if (!name) return '';
-                  return name.toLowerCase()
-                    .replace(/á/g, 'a')
-                    .replace(/é/g, 'e')
-                    .replace(/í/g, 'i')
-                    .replace(/ó/g, 'o')
-                    .replace(/ú/g, 'u')
-                    .replace(/ñ/g, 'n')
-                    .replace(/\s+/g, ' ')
-                    .trim();
-                };
+                // Uses the main normalizeName function
 
                 // Count selections and matches for each tutor
                 const validTutorNames = tutoresData.map(t => `${t.Nombre} ${t.Apellido}`);
@@ -1413,9 +1650,9 @@ const Maraton = () => {
                     </Typography>
                     <Typography variant="body2" textAlign="center" sx={{
                       color: tutor.effectiveness >= 80 ? 'success.main' :
-                             tutor.effectiveness >= 50 ? 'warning.main' :
-                             tutor.effectiveness > 0 ? 'error.main' :
-                             'text.secondary',
+                        tutor.effectiveness >= 50 ? 'warning.main' :
+                          tutor.effectiveness > 0 ? 'error.main' :
+                            'text.secondary',
                       fontWeight: tutor.effectiveness > 0 ? 600 : 400
                     }}>
                       {tutor.selected > 0 ? `${tutor.effectiveness.toFixed(0)}%` : '-'}
@@ -1428,465 +1665,9 @@ const Maraton = () => {
         </Box>
       </Box>
     </Box>;
-  }
+  };
 
-  const Analisis = () => {
-    if (!assignmentResults || !assignmentResults.groups) {
-      return <Box sx={{ p: 3 }}>
-        <Typography variant="h5" fontWeight={600} sx={{ mb: 2 }}>
-          Análisis de Resultados
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          Ejecuta la asignación de grupos para ver el análisis detallado de los resultados.
-        </Typography>
-      </Box>;
-    }
 
-    // Calculate detailed analytics
-    const groups = assignmentResults.groups;
-
-    // Helper function to calculate match score for a student
-    const calculateMatchScore = (alumno: any, groupTutors: string[]) => {
-      let score = 0;
-      let maxScore = 0;
-      // Normalize function
-      const normalizeName = (name: string) => {
-        if (!name) return '';
-        return name.toLowerCase()
-          .replace(/á/g, 'a')
-          .replace(/é/g, 'e')
-          .replace(/í/g, 'i')
-          .replace(/ó/g, 'o')
-          .replace(/ú/g, 'u')
-          .replace(/ñ/g, 'n')
-          .replace(/\s+/g, ' ')
-          .trim();
-      };
-      // Calculate similarity between two strings - strict matching only (like warning system)
-      const calculateSimilarity = (str1: string, str2: string): number => {
-        if (!str1 || !str2) return 0;
-        const norm1 = normalizeName(str1);
-        const norm2 = normalizeName(str2);
-        if (norm1 === norm2) return 1.0;
-        // Remove abbreviation matching to be consistent with warning system
-        return 0;
-      };
-      // Check each tutor preference
-      for (let i = 1; i <= 5; i++) {
-        const tutorPref = alumno[`Tutor${i}`];
-        if (tutorPref) {
-          const weight = pesoRelativoTutores[i - 1] || 0;
-          maxScore += weight;
-          // Check if this tutor is in the group
-          for (const groupTutor of groupTutors) {
-            const similarity = calculateSimilarity(tutorPref, groupTutor);
-            if (similarity >= (1.0 - similarityThreshold)) {
-              score += weight;
-              break;
-            }
-          }
-        }
-      }
-      return { score, maxScore };
-    };
-
-    // Group size distribution
-    const groupSizes = groups.map((g: any) => g.alumnos.length);
-    const minGroupSize = Math.min(...groupSizes);
-    const maxGroupSize = Math.max(...groupSizes);
-    const avgGroupSize = groupSizes.reduce((a: number, b: number) => a + b, 0) / groupSizes.length;
-
-    // Tutor distribution
-    const tutorCounts = groups.map((g: any) => g.tutores.length);
-    const minTutors = Math.min(...tutorCounts);
-    const maxTutors = Math.max(...tutorCounts);
-    const avgTutors = tutorCounts.reduce((a: number, b: number) => a + b, 0) / tutorCounts.length;
-
-    // Student satisfaction analysis
-    const studentAnalysis = groups.flatMap((group: any) =>
-      group.alumnos.map((alumno: any) => {
-        const { score, maxScore } = calculateMatchScore(alumno, group.tutores);
-        const satisfaction = maxScore > 0 ? (score / maxScore) * 100 : 0;
-        return {
-          name: `${alumno.Nombre} ${alumno.Apellido}`,
-          puntaje: parseFloat(alumno.Puntaje) || 0,
-          satisfaction,
-          score,
-          maxScore,
-          group: group.name
-        };
-      })
-    );
-
-    const avgSatisfaction = studentAnalysis.reduce((sum: number, s: any) => sum + s.satisfaction, 0) / studentAnalysis.length;
-
-    // Satisfaction categories
-    const excellentSatisfaction = studentAnalysis.filter((s: any) => s.satisfaction >= 75).length;
-    const goodSatisfaction = studentAnalysis.filter((s: any) => s.satisfaction >= 50 && s.satisfaction < 75).length;
-    const fairSatisfaction = studentAnalysis.filter((s: any) => s.satisfaction >= 25 && s.satisfaction < 50).length;
-    const poorSatisfaction = studentAnalysis.filter((s: any) => s.satisfaction < 25).length;
-
-    // Top and bottom performers
-    const topPerformers = [...studentAnalysis].sort((a, b) => b.puntaje - a.puntaje).slice(0, 5);
-    const mostSatisfied = [...studentAnalysis].sort((a, b) => b.satisfaction - a.satisfaction).slice(0, 5);
-    const leastSatisfied = [...studentAnalysis].sort((a, b) => a.satisfaction - b.satisfaction).slice(0, 5);
-
-    // Algorithm efficiency
-    const efficiency = ((assignmentResults.totalScore / assignmentResults.perfectScore) * 100);
-
-    return <Box sx={{ p: 3, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0, overflow: 'auto' }}>
-      <Typography variant="h5" fontWeight={600} sx={{ mb: 3 }}>
-        Análisis de Resultados
-      </Typography>
-
-      {/* Algorithm Performance */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>📊 Rendimiento del Algoritmo</Typography>
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 2, mb: 2 }}>
-          <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
-            <Typography variant="caption" color="text.secondary">Eficiencia General</Typography>
-            <Typography variant="h5" color={efficiency >= 70 ? 'success.main' : efficiency >= 50 ? 'warning.main' : 'error.main'}>
-              {efficiency.toFixed(1)}%
-            </Typography>
-          </Box>
-          <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
-            <Typography variant="caption" color="text.secondary">Configuración Óptima</Typography>
-            <Typography variant="h5">{assignmentResults.selectedGroupCount} grupos</Typography>
-          </Box>
-          <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
-            <Typography variant="caption" color="text.secondary">Satisfacción Promedio</Typography>
-            <Typography variant="h5" color={avgSatisfaction >= 70 ? 'success.main' : avgSatisfaction >= 50 ? 'warning.main' : 'error.main'}>
-              {avgSatisfaction.toFixed(1)}%
-            </Typography>
-          </Box>
-        </Box>
-      </Box>
-
-      {/* Group Distribution */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>👥 Distribución de Grupos</Typography>
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 2, mb: 2 }}>
-          <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
-            <Typography variant="caption" color="text.secondary">Alumnos por Grupo</Typography>
-            <Typography variant="body1">{minGroupSize} - {maxGroupSize} (avg: {avgGroupSize.toFixed(1)})</Typography>
-          </Box>
-          <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
-            <Typography variant="caption" color="text.secondary">Tutores por Grupo</Typography>
-            <Typography variant="body1">{minTutors} - {maxTutors} (avg: {avgTutors.toFixed(1)})</Typography>
-          </Box>
-        </Box>
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 1, mb: 3 }}>
-          {groups.map((group: any, index: number) => (
-            <Box key={index} sx={{ p: 1, bgcolor: 'grey.100', borderRadius: 0.5, textAlign: 'center' }}>
-              <Typography variant="caption">{group.name}</Typography>
-              <Typography variant="body2" fontWeight={600}>
-                {group.alumnos.length} estudiantes
-              </Typography>
-              <Typography variant="caption" color="text.secondary">
-                {group.tutores.length} tutores
-              </Typography>
-            </Box>
-          ))}
-        </Box>
-
-        {/* Group Size Visualization */}
-        <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
-          <Typography variant="subtitle2" sx={{ mb: 2 }}>Tamaño de Grupos (Estudiantes)</Typography>
-          <Box sx={{ display: 'flex', alignItems: 'end', height: 100, gap: 1 }}>
-            {groups.map((group: any, index: number) => {
-              const height = maxGroupSize > 0 ? (group.alumnos.length / maxGroupSize) * 70 : 0;
-              return (
-                <Box key={index} sx={{ flex: 1, textAlign: 'center' }}>
-                  <Box
-                    sx={{
-                      height: `${height}px`,
-                      bgcolor: `rgb(${main.r}, ${main.g}, ${main.b})`,
-                      mb: 1,
-                      borderRadius: '4px 4px 0 0',
-                      display: 'flex',
-                      alignItems: 'end',
-                      justifyContent: 'center',
-                      color: 'white',
-                      fontWeight: 'bold',
-                      fontSize: '12px'
-                    }}
-                  >
-                    {group.alumnos.length}
-                  </Box>
-                  <Typography variant="caption" sx={{ fontSize: '10px' }}>
-                    {group.name}
-                  </Typography>
-                </Box>
-              );
-            })}
-          </Box>
-        </Box>
-      </Box>
-
-      {/* Student Satisfaction */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>😊 Satisfacción de Estudiantes</Typography>
-        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 2, mb: 3 }}>
-          <Box sx={{ p: 2, bgcolor: 'success.light', borderRadius: 1, textAlign: 'center' }}>
-            <Typography variant="h4" color="success.dark">{excellentSatisfaction}</Typography>
-            <Typography variant="caption">Excelente (≥75%)</Typography>
-          </Box>
-          <Box sx={{ p: 2, bgcolor: '#FFC10740', borderRadius: 1, textAlign: 'center' }}>
-            <Typography variant="h4" color="warning.dark">{goodSatisfaction}</Typography>
-            <Typography variant="caption">Buena (50-74%)</Typography>
-          </Box>
-          <Box sx={{ p: 2, bgcolor: 'warning.light', borderRadius: 1, textAlign: 'center' }}>
-            <Typography variant="h4" color="warning.dark">{fairSatisfaction}</Typography>
-            <Typography variant="caption">Regular (25-49%)</Typography>
-          </Box>
-          <Box sx={{ p: 2, bgcolor: 'error.light', borderRadius: 1, textAlign: 'center' }}>
-            <Typography variant="h4" color="error.dark">{poorSatisfaction}</Typography>
-            <Typography variant="caption">Pobre (&lt;25%)</Typography>
-          </Box>
-        </Box>
-
-        {/* Satisfaction Distribution Chart */}
-        <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
-          <Typography variant="subtitle2" sx={{ mb: 2 }}>Distribución de Satisfacción</Typography>
-          <Box sx={{ display: 'flex', alignItems: 'end', height: 120, gap: 1 }}>
-            {[
-              { value: excellentSatisfaction, color: '#4caf50', label: 'Excelente' },
-              { value: goodSatisfaction, color: '#ff9800', label: 'Buena' },
-              { value: fairSatisfaction, color: '#ff9800', label: 'Regular' },
-              { value: poorSatisfaction, color: '#f44336', label: 'Pobre' }
-            ].map((item, index) => {
-              const maxValue = Math.max(excellentSatisfaction, goodSatisfaction, fairSatisfaction, poorSatisfaction);
-              const height = maxValue > 0 ? (item.value / maxValue) * 80 : 0;
-              return (
-                <Box key={index} sx={{ flex: 1, textAlign: 'center' }}>
-                  <Box
-                    sx={{
-                      height: `${height}px`,
-                      bgcolor: item.color,
-                      mb: 1,
-                      borderRadius: '4px 4px 0 0',
-                      display: 'flex',
-                      alignItems: 'end',
-                      justifyContent: 'center',
-                      color: 'white',
-                      fontWeight: 'bold',
-                      fontSize: '12px'
-                    }}
-                  >
-                    {item.value > 0 && item.value}
-                  </Box>
-                  <Typography variant="caption" sx={{ fontSize: '10px' }}>
-                    {item.label}
-                  </Typography>
-                </Box>
-              );
-            })}
-          </Box>
-        </Box>
-      </Box>
-
-      {/* Top Performers */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>🏆 Estudiantes Destacados</Typography>
-        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 3 }}>
-          <Box>
-            <Typography variant="subtitle1" sx={{ mb: 1 }}>Mayor Puntaje Académico</Typography>
-            {topPerformers.map((student, index) => (
-              <Box key={index} sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5, borderBottom: '1px solid', borderColor: 'divider' }}>
-                <Typography variant="body2">{student.name}</Typography>
-                <Typography variant="body2" fontWeight={600}>{student.puntaje}</Typography>
-              </Box>
-            ))}
-          </Box>
-          <Box>
-            <Typography variant="subtitle1" sx={{ mb: 1 }}>Mayor Satisfacción con Tutores</Typography>
-            {mostSatisfied.map((student, index) => (
-              <Box key={index} sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5, borderBottom: '1px solid', borderColor: 'divider' }}>
-                <Typography variant="body2">{student.name}</Typography>
-                <Typography variant="body2" fontWeight={600} color="success.main">
-                  {student.satisfaction.toFixed(1)}%
-                </Typography>
-              </Box>
-            ))}
-          </Box>
-        </Box>
-      </Box>
-
-      {/* Areas for Improvement */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>⚠️ Áreas de Mejora</Typography>
-        <Box>
-          <Typography variant="subtitle1" sx={{ mb: 1 }}>Estudiantes con Menor Satisfacción</Typography>
-          {leastSatisfied.map((student, index) => (
-            <Box key={index} sx={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              py: 1,
-              px: 2,
-              mb: 1,
-              bgcolor: student.satisfaction < 25 ? 'error.light' : 'warning.light',
-              borderRadius: 1
-            }}>
-              <Box>
-                <Typography variant="body2">{student.name}</Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Grupo: {student.group} | Puntaje: {student.puntaje}
-                </Typography>
-              </Box>
-              <Box sx={{ textAlign: 'right' }}>
-                <Typography variant="body2" fontWeight={600}>
-                  {student.satisfaction.toFixed(1)}%
-                </Typography>
-                <Typography variant="caption">
-                  {student.score}/{student.maxScore}
-                </Typography>
-              </Box>
-            </Box>
-          ))}
-        </Box>
-      </Box>
-
-      {/* Statistical Insights */}
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="h6" sx={{ mb: 2 }}>📈 Análisis Estadístico</Typography>
-        <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 3 }}>
-          <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
-            <Typography variant="subtitle1" sx={{ mb: 2 }}>Correlación Puntaje - Satisfacción</Typography>
-            {(() => {
-              // Calculate correlation between academic score and satisfaction
-              const validStudents = studentAnalysis.filter((s: any) => s.puntaje > 0);
-              if (validStudents.length < 2) return <Typography variant="body2">Datos insuficientes</Typography>;
-
-              const meanPuntaje = validStudents.reduce((sum: number, s: any) => sum + s.puntaje, 0) / validStudents.length;
-              const meanSatisfaction = validStudents.reduce((sum: number, s: any) => sum + s.satisfaction, 0) / validStudents.length;
-
-              const numerator = validStudents.reduce((sum: number, s: any) =>
-                sum + (s.puntaje - meanPuntaje) * (s.satisfaction - meanSatisfaction), 0);
-              const denominator = Math.sqrt(
-                validStudents.reduce((sum: number, s: any) => sum + Math.pow(s.puntaje - meanPuntaje, 2), 0) *
-                validStudents.reduce((sum: number, s: any) => sum + Math.pow(s.satisfaction - meanSatisfaction, 2), 0)
-              );
-
-              const correlation = denominator !== 0 ? numerator / denominator : 0;
-
-              return (
-                <Box>
-                  <Typography variant="h4" color={Math.abs(correlation) > 0.5 ? 'success.main' : Math.abs(correlation) > 0.3 ? 'warning.main' : 'text.secondary'}>
-                    {correlation.toFixed(3)}
-                  </Typography>
-                  <Typography variant="caption" color="text.secondary">
-                    {Math.abs(correlation) > 0.5 ? 'Correlación fuerte' : Math.abs(correlation) > 0.3 ? 'Correlación moderada' : 'Correlación débil'}
-                  </Typography>
-                  <Typography variant="body2" sx={{ mt: 1, fontSize: '0.75rem' }}>
-                    {correlation > 0 ? 'Los estudiantes con mejor puntaje tienden a estar más satisfechos' :
-                     correlation < -0.2 ? 'Los estudiantes con mejor puntaje tienden a estar menos satisfechos' :
-                     'No hay relación clara entre puntaje y satisfacción'}
-                  </Typography>
-                </Box>
-              );
-            })()}
-          </Box>
-
-          <Box sx={{ p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
-            <Typography variant="subtitle1" sx={{ mb: 2 }}>Desviación Estándar</Typography>
-            <Box sx={{ mb: 2 }}>
-              <Typography variant="caption" color="text.secondary">Satisfacción</Typography>
-              <Typography variant="h5">
-                {(() => {
-                  const mean = avgSatisfaction;
-                  const variance = studentAnalysis.reduce((sum: number, s: any) => sum + Math.pow(s.satisfaction - mean, 2), 0) / studentAnalysis.length;
-                  return Math.sqrt(variance).toFixed(1);
-                })()}%
-              </Typography>
-            </Box>
-            <Box>
-              <Typography variant="caption" color="text.secondary">Tamaño de Grupos</Typography>
-              <Typography variant="h5">
-                {(() => {
-                  const variance = groupSizes.reduce((sum: number, size: number) => sum + Math.pow(size - avgGroupSize, 2), 0) / groupSizes.length;
-                  return Math.sqrt(variance).toFixed(1);
-                })()}
-              </Typography>
-            </Box>
-          </Box>
-        </Box>
-
-        {/* Distribution Analysis */}
-        <Box sx={{ mt: 3, p: 2, bgcolor: 'background.paper', borderRadius: 1, border: '1px solid', borderColor: 'divider' }}>
-          <Typography variant="subtitle1" sx={{ mb: 2 }}>Distribución de Puntajes Académicos</Typography>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 2 }}>
-            <Box sx={{ textAlign: 'center' }}>
-              <Typography variant="caption" color="text.secondary">Mínimo</Typography>
-              <Typography variant="h6">{Math.min(...studentAnalysis.map((s: any) => s.puntaje)).toFixed(1)}</Typography>
-            </Box>
-            <Box sx={{ textAlign: 'center' }}>
-              <Typography variant="caption" color="text.secondary">Mediana</Typography>
-              <Typography variant="h6">
-                {(() => {
-                  const sorted = [...studentAnalysis].sort((a: any, b: any) => a.puntaje - b.puntaje);
-                  const mid = Math.floor(sorted.length / 2);
-                  return sorted.length % 2 === 0 ?
-                    ((sorted[mid - 1].puntaje + sorted[mid].puntaje) / 2).toFixed(1) :
-                    sorted[mid].puntaje.toFixed(1);
-                })()}
-              </Typography>
-            </Box>
-            <Box sx={{ textAlign: 'center' }}>
-              <Typography variant="caption" color="text.secondary">Promedio</Typography>
-              <Typography variant="h6">
-                {(studentAnalysis.reduce((sum: number, s: any) => sum + s.puntaje, 0) / studentAnalysis.length).toFixed(1)}
-              </Typography>
-            </Box>
-            <Box sx={{ textAlign: 'center' }}>
-              <Typography variant="caption" color="text.secondary">Máximo</Typography>
-              <Typography variant="h6">{Math.max(...studentAnalysis.map((s: any) => s.puntaje)).toFixed(1)}</Typography>
-            </Box>
-          </Box>
-        </Box>
-      </Box>
-
-      {/* Recommendations */}
-      <Box sx={{ p: 2, bgcolor: 'info.light', borderRadius: 1 }}>
-        <Typography variant="h6" sx={{ mb: 1 }}>💡 Recomendaciones</Typography>
-        <Box component="ul" sx={{ pl: 2, m: 0 }}>
-          {efficiency < 50 && (
-            <Typography component="li" variant="body2" sx={{ mb: 0.5 }}>
-              La eficiencia es baja ({efficiency.toFixed(1)}%). Considera ajustar los parámetros o revisar la calidad de los datos.
-            </Typography>
-          )}
-          {assignmentResults.statistics.unassigned > 0 && (
-            <Typography component="li" variant="body2" sx={{ mb: 0.5 }}>
-              Hay {assignmentResults.statistics.unassigned} estudiantes sin asignar. Aumenta la capacidad por grupo o el número de grupos.
-            </Typography>
-          )}
-          {poorSatisfaction > studentAnalysis.length * 0.2 && (
-            <Typography component="li" variant="body2" sx={{ mb: 0.5 }}>
-              Más del 20% de estudiantes tienen baja satisfacción. Revisa las preferencias de tutores o ajusta la sensibilidad de coincidencia.
-            </Typography>
-          )}
-          {maxGroupSize - minGroupSize > 3 && (
-            <Typography component="li" variant="body2" sx={{ mb: 0.5 }}>
-              Los grupos tienen tamaños muy desiguales. Considera ajustar los parámetros para mayor balance.
-            </Typography>
-          )}
-          {(() => {
-            const groupSizeVariance = groupSizes.reduce((sum: number, size: number) => sum + Math.pow(size - avgGroupSize, 2), 0) / groupSizes.length;
-            const groupSizeStdDev = Math.sqrt(groupSizeVariance);
-            return groupSizeStdDev > 2;
-          })() && (
-            <Typography component="li" variant="body2" sx={{ mb: 0.5 }}>
-              Alta variabilidad en tamaños de grupos. Considera ajustar la distribución para mayor uniformidad.
-            </Typography>
-          )}
-          {avgSatisfaction < 60 && avgSatisfaction > 0 && (
-            <Typography component="li" variant="body2" sx={{ mb: 0.5 }}>
-              La satisfacción promedio es baja ({avgSatisfaction.toFixed(1)}%). Revisa si los estudiantes están especificando tutores válidos.
-            </Typography>
-          )}
-        </Box>
-      </Box>
-    </Box>;
-  }
 
   return <>
     <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
@@ -1909,6 +1690,20 @@ const Maraton = () => {
           setPesoRelativoTutores={setPesoRelativoTutores}
           similarityThreshold={similarityThreshold}
           setSimilarityThreshold={setSimilarityThreshold}
+          seed={seed}
+          setSeed={setSeed}
+          geneticIterations={geneticIterations}
+          setGeneticIterations={setGeneticIterations}
+          populationSize={populationSize}
+          setPopulationSize={setPopulationSize}
+          mutationRate={mutationRate}
+          setMutationRate={setMutationRate}
+          crossoverRate={crossoverRate}
+          setCrossoverRate={setCrossoverRate}
+          tournamentSize={tournamentSize}
+          setTournamentSize={setTournamentSize}
+          elitismCount={elitismCount}
+          setElitismCount={setElitismCount}
           onRecalculate={handleRecalculate}
           canRecalculate={alumnosData.length > 0 && tutoresData.length > 0}
           tutoresCount={tutoresData.length}
@@ -1916,162 +1711,11 @@ const Maraton = () => {
         />
       } />
       <CustomTabPanel value={maratonTab} index={"Resultados"} children={<Resultados />} />
-      <CustomTabPanel value={maratonTab} index={"Análisis"} children={<Analisis />} />
     </Box>
   </>;
 };
 
-// Parameters component - moved outside to prevent recreation
-const Parametros = ({
-  minCantidadGrupos,
-  setMinCantidadGrupos,
-  maxCantidadGrupos,
-  setMaxCantidadGrupos,
-  maximosAlumnosPorGrupo,
-  setMaximosAlumnosPorGrupo,
-  pesoRelativoTutores,
-  setPesoRelativoTutores,
-  similarityThreshold,
-  setSimilarityThreshold,
-  onRecalculate,
-  canRecalculate,
-  tutoresCount,
-  alumnosCount
-}: any) => {
-  const handlePesoChange = (index: number, value: string) => {
-    setPesoRelativoTutores((prev: number[]) => {
-      const newPesos = [...prev];
-      newPesos[index] = Number(value);
-      return newPesos;
-    });
-  };
 
-  return <Box sx={{ p: 3 }}>
-    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-      <Typography variant="h5" fontWeight={600}>
-        Parámetros de la Maratón
-      </Typography>
-      <Button
-        variant="contained"
-        onClick={onRecalculate}
-        disabled={!canRecalculate}
-        sx={{ bgcolor: 'primary.main' }}
-      >
-        Recalcular Grupos
-      </Button>
-    </Box>
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, maxWidth: 400 }}>
-      <Box>
-        <Typography variant="body1" sx={{ mb: 1 }}>
-          Mínima Cantidad de Grupos
-        </Typography>
-        <input
-          type="number"
-          value={minCantidadGrupos}
-          onChange={(e) => setMinCantidadGrupos(Number(e.target.value))}
-          min="1"
-          style={{
-            padding: '8px 12px',
-            border: '1px solid #ccc',
-            borderRadius: '4px',
-            fontSize: '16px',
-            width: '100px'
-          }}
-        />
-      </Box>
-      <Box>
-        <Typography variant="body1" sx={{ mb: 1 }}>
-          Máxima Cantidad de Grupos
-        </Typography>
-        <input
-          type="number"
-          value={maxCantidadGrupos}
-          onChange={(e) => setMaxCantidadGrupos(Number(e.target.value))}
-          min={minCantidadGrupos}
-          style={{
-            padding: '8px 12px',
-            border: '1px solid #ccc',
-            borderRadius: '4px',
-            fontSize: '16px',
-            width: '100px'
-          }}
-        />
-        {(tutoresCount > 0 || alumnosCount > 0) && maxCantidadGrupos > Math.min(tutoresCount || Infinity, alumnosCount || Infinity) && (
-          <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 0.5 }}>
-            ⚠️ Máximo {Math.min(tutoresCount || Infinity, alumnosCount || Infinity)} grupos
-            (limitado por {tutoresCount <= alumnosCount ? 'tutores' : 'alumnos'}: {Math.min(tutoresCount || Infinity, alumnosCount || Infinity)})
-          </Typography>
-        )}
-      </Box>
-      <Box>
-        <Typography variant="body1" sx={{ mb: 1 }}>
-          Máximos Alumnos por Grupo
-        </Typography>
-        <input
-          type="number"
-          value={maximosAlumnosPorGrupo}
-          onChange={(e) => setMaximosAlumnosPorGrupo(Number(e.target.value))}
-          style={{
-            padding: '8px 12px',
-            border: '1px solid #ccc',
-            borderRadius: '4px',
-            fontSize: '16px',
-            width: '100px'
-          }}
-        />
-      </Box>
-      <Box>
-        <Typography variant="body1" sx={{ mb: 1 }}>
-          Peso relativo tutores
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          {pesoRelativoTutores.map((peso: number, index: number) => (
-            <Box key={index}>
-              <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>
-                Tutor {index + 1}
-              </Typography>
-              <input
-                type="number"
-                value={peso}
-                onChange={(e) => handlePesoChange(index, e.target.value)}
-                style={{
-                  padding: '8px 12px',
-                  border: '1px solid #ccc',
-                  borderRadius: '4px',
-                  fontSize: '16px',
-                  width: '60px'
-                }}
-              />
-            </Box>
-          ))}
-        </Box>
-      </Box>
-      <Box>
-        <Typography variant="body1" sx={{ mb: 1 }}>
-          Sensibilidad de coincidencia de nombres: {(similarityThreshold * 100).toFixed(0)}%
-        </Typography>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Typography variant="caption">Estricto</Typography>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={similarityThreshold * 100}
-            onChange={(e) => setSimilarityThreshold(Number(e.target.value) / 100)}
-            style={{
-              width: '300px',
-              cursor: 'pointer'
-            }}
-          />
-          <Typography variant="caption">Flexible</Typography>
-        </Box>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-          0% = Solo coincidencias exactas | 100% = Acepta variaciones (acentos, abreviaciones)
-        </Typography>
-      </Box>
-    </Box>
-  </Box>;
-};
 
 const drawerWidth = 240;
 
@@ -2092,7 +1736,7 @@ export default function App() {
       {sidebarOpen && (
         <Box sx={{ width: '100%', px: 1 }}>
           <img
-            src="/emprending.png"
+            src="emprending.png"
             alt="Emprending Logo"
             style={{ width: '100%', height: 'auto', transform: 'scaleY(0.9)' }}
           />

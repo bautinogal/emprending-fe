@@ -3,7 +3,7 @@ import { useSelector, useDispatch } from 'react-redux'
 import './App.css'
 
 import * as React from 'react';
-import { Box, Button, Divider, Drawer, TextField, IconButton, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Tab, Tabs, Typography } from '@mui/material';
+import { Box, Button, Divider, Drawer, TextField, IconButton, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Tab, Tabs, Typography, Modal, LinearProgress } from '@mui/material';
 import { ChevronLeft as ChevronLeftIcon, Download as DownloadIcon, Groups as GroupsIcon, Menu as MenuIcon, School as SchoolIcon, UploadFile as UploadFileIcon } from '@mui/icons-material';
 import { DataGrid, type GridColDef } from '@mui/x-data-grid';
 import { RootState, AppDispatch } from './store/store';
@@ -22,6 +22,152 @@ const CustomTabPanel = (props: { children?: React.ReactNode; index: string; valu
     >
       {value === index && children}
     </div>
+  );
+};
+
+const OptimizationProgressModal = () => {
+  const running = useSelector((state: RootState) => state.app.running);
+  const runningPercentage = useSelector((state: RootState) => state.app.runningPercentage);
+  const generation = useSelector((state: RootState) => state.app?.generation);
+  const totalIterations = useSelector((state: RootState) => state.app.totalIterations);
+  const currentBestScore = useSelector((state: RootState) => state.app.currentBestScore);
+  const currentWorstScore = useSelector((state: RootState) => state.app.currentWorstScore);
+  const perfectFitness = useSelector((state: RootState) => state.app.perfectFitness);
+  const maxTeoricalFitness = useSelector((state: RootState) => state.app.maxTeoricalFitness);
+  const combinations = useSelector((state: RootState) => state.app.combinations);
+  
+  return (
+    <Modal open={running} disableEscapeKeyDown sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', }} >
+      <Box sx={{ bgcolor: 'background.paper', borderRadius: 2, boxShadow: 24, p: 4, minWidth: 400, maxWidth: 600 }}>
+        <Typography variant="h5" sx={{ mb: 3, textAlign: 'center', fontWeight: 600 }}>
+          🧬 Optimización en Progreso
+        </Typography>
+
+        <Box sx={{ mb: 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+            <Typography variant="body2">Progreso General</Typography>
+            <Typography variant="body2" color="primary.main" fontWeight={600}>
+              {Math.round((runningPercentage || 0) * 100)}%
+            </Typography>
+          </Box>
+          <LinearProgress
+            variant="determinate"
+            value={(runningPercentage || 0) * 100}
+            sx={{ height: 8, borderRadius: 4 }}
+          />
+        </Box>
+
+        {generation && (
+          <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 2, mb: 3 }}>
+            <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+              <Typography variant="h4" color="primary.main" fontWeight={600}>
+                {generation?.i || 0} / {totalIterations || 0}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Generación
+              </Typography>
+            </Box>
+            <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
+              <Typography variant="h4" color="info.main" fontWeight={600}>
+                {combinations || 0}
+              </Typography>
+              <Typography variant="caption" color="text.secondary">
+                Total Combinaciones
+              </Typography>
+            </Box>
+          </Box>
+        )}
+
+        {currentBestScore !== null && perfectFitness !== null && (
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="body1" sx={{ mb: 1, fontWeight: 600 }}>
+              Fitness Histórico
+            </Typography>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2, textAlign: 'center' }}>
+              <Box>
+                <Typography variant="h6" color="success.main" fontWeight={600}>
+                  {currentBestScore.toFixed(2)}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Mejor Histórico
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="h6" color="error.main" fontWeight={600}>
+                  {(currentWorstScore || 0).toFixed(2)}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Peor Histórico
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="h6" color="info.main" fontWeight={600}>
+                  {maxTeoricalFitness ? maxTeoricalFitness.toFixed(2) : 'N/A'}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Máximo Teórico
+                </Typography>
+              </Box>
+            </Box>
+
+            {perfectFitness > 0 && (
+              <Box sx={{ mt: 2 }}>
+                <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
+                  <Typography variant="body2">Eficiencia</Typography>
+                  <Typography variant="body2" color="success.main" fontWeight={600}>
+                    {((currentBestScore / perfectFitness) * 100).toFixed(1)}%
+                  </Typography>
+                </Box>
+                <LinearProgress
+                  variant="determinate"
+                  value={(currentBestScore / perfectFitness) * 100}
+                  sx={{ height: 6, borderRadius: 3 }}
+                  color="success"
+                />
+              </Box>
+            )}
+          </Box>
+        )}
+
+        {generation?.individuals && (
+          <Box sx={{ mb: 2 }}>
+            <Typography variant="body1" sx={{ mb: 1, fontWeight: 600 }}>
+              Generación Actual
+            </Typography>
+            <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 2, textAlign: 'center' }}>
+              <Box>
+                <Typography variant="body2" color="success.main" fontWeight={600}>
+                  {generation.bestFitness?.toFixed(2) || 'N/A'}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Mejor
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="body2" color="warning.main" fontWeight={600}>
+                  {generation.averageFitness?.toFixed(2) || 'N/A'}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Promedio
+                </Typography>
+              </Box>
+              <Box>
+                <Typography variant="body2" color="error.main" fontWeight={600}>
+                  {generation.worstFitness?.toFixed(2) || 'N/A'}
+                </Typography>
+                <Typography variant="caption" color="text.secondary">
+                  Peor
+                </Typography>
+              </Box>
+            </Box>
+          </Box>
+        )}
+
+        <Typography variant="body2" color="text.secondary" sx={{ textAlign: 'center', mt: 2 }}>
+          El algoritmo genético está buscando la mejor combinación de grupos...
+        </Typography>
+      </Box>
+    </Modal>
   );
 };
 
@@ -219,7 +365,7 @@ const Maraton = () => {
             Subir CSV
             <input type="file" accept=".csv" onChange={(e) => handleFileUpload(e, 'alumnos')} hidden />
           </Button>
-          <Button variant="outlined" startIcon={<DownloadIcon />} onClick={() => downloadExampleCSV('tutores')} >
+          <Button variant="outlined" startIcon={<DownloadIcon />} onClick={() => downloadExampleCSV('alumnos')} >
             Descargar Plantilla
           </Button>
         </Box>
@@ -415,16 +561,16 @@ const Maraton = () => {
   };
 
   const Resultados = () => {
-    // Uses the shared calculateMatchScore function
+    const result = useSelector((state: RootState) => state.app.result);
 
     // Function to generate and download CSV
     const downloadResultsAsCSV = () => {
-      if (!assignmentResults) return;
+      if (!result) return;
 
       // Create CSV content
       const csvRows = ['Grupo,Nombre_Alumno,Apellido_Alumno,Email,Emprendimiento,Coincidencia,Tutores_Asignados'];
 
-      assignmentResults.groups.forEach((group: any) => {
+      result.groups.forEach((group: any) => {
         const tutoresString = group.tutores.join('; ');
 
         group.alumnos.forEach((alumno: any) => {
@@ -443,12 +589,12 @@ const Maraton = () => {
       });
 
       // Add unassigned students if any
-      const unassignedCount = assignmentResults.statistics.unassigned;
+      const unassignedCount = result.statistics.unassigned;
       if (unassignedCount > 0) {
         csvRows.push('');
         csvRows.push('Sin Asignar,,,,,,');
         alumnosData.forEach((alumno: any) => {
-          const isAssigned = assignmentResults.groups.some((g: any) =>
+          const isAssigned = result.groups.some((g: any) =>
             g.alumnos.some((a: any) => a.id === alumno.id)
           );
           if (!isAssigned) {
@@ -489,30 +635,17 @@ const Maraton = () => {
       document.body.removeChild(link);
     };
 
-    if (!assignmentResults) {
+    if (!result) {
       return <Box sx={{ p: 3 }}>
-        <Typography variant="h5" fontWeight={600} sx={{ mb: 2 }}>
-          Resultados de la Asignación
-        </Typography>
-        <Typography variant="body1" color="text.secondary">
-          Carga los archivos CSV de tutores y alumnos para ver los resultados de la asignación.
-        </Typography>
+        <Typography variant="h5" fontWeight={600} sx={{ mb: 2 }} children={"Resultados de la Asignación"}/>
+        <Typography variant="body1" color="text.secondary" children={"Carga los archivos CSV de tutores y alumnos para ver los resultados de la asignación."}/>
       </Box>;
     }
 
     return <Box sx={{ p: 3, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h5" fontWeight={600}>
-          Resultados de la Asignación
-        </Typography>
-        <Button
-          variant="contained"
-          startIcon={<DownloadIcon />}
-          onClick={downloadResultsAsCSV}
-          sx={{ bgcolor: 'success.main' }}
-        >
-          Descargar CSV
-        </Button>
+        <Typography variant="h5" fontWeight={600} children={"Resultados de la Asignación"}/>
+        <Button variant="contained" startIcon={<DownloadIcon />} onClick={downloadResultsAsCSV} sx={{ bgcolor: 'success.main' }} children={"Descargar CSV"}/>
       </Box>
 
       {/* Statistics Summary */}
@@ -520,29 +653,29 @@ const Maraton = () => {
         <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 2 }}>
           <Box>
             <Typography variant="caption" color="text.secondary">Grupos Óptimos</Typography>
-            <Typography variant="h6" >{assignmentResults.selectedGroupCount || assignmentResults.cantidadGrupos}</Typography>
+            <Typography variant="h6" >{result.selectedGroupCount || result.cantidadGrupos}</Typography>
           </Box>
           <Box>
             <Typography variant="caption" color="text.secondary">Total Alumnos</Typography>
-            <Typography variant="h6">{assignmentResults.statistics.totalAlumnos}</Typography>
+            <Typography variant="h6">{result.statistics.totalAlumnos}</Typography>
           </Box>
           <Box>
             <Typography variant="caption" color="text.secondary">Asignados</Typography>
-            <Typography variant="h6" color="success.main">{assignmentResults.statistics.totalAssigned}</Typography>
+            <Typography variant="h6" color="success.main">{result.statistics.totalAssigned}</Typography>
           </Box>
           <Box>
             <Typography variant="caption" color="text.secondary">Sin Asignar</Typography>
-            <Typography variant="h6" color={assignmentResults.statistics.unassigned > 0 ? "warning.main" : "text.primary"}>
-              {assignmentResults.statistics.unassigned}
+            <Typography variant="h6" color={result.statistics.unassigned > 0 ? "warning.main" : "text.primary"}>
+              {result.statistics.unassigned}
             </Typography>
           </Box>
           <Box>
             <Typography variant="caption" color="text.secondary">Puntuación Total</Typography>
             <Typography variant="h6" color={(() => {
-              const percentage = (assignmentResults.totalScore / assignmentResults.perfectScore) * 100;
+              const percentage = (result.totalScore / result.perfectScore) * 100;
               return percentage >= 70 ? 'success.main' : percentage >= 50 ? 'warning.main' : 'error.main';
             })()}>
-              {((assignmentResults.totalScore / assignmentResults.perfectScore) * 100).toFixed(1)}%
+              {((result.totalScore / result.perfectScore) * 100).toFixed(1)}%
             </Typography>
           </Box>
           <Box>
@@ -551,7 +684,7 @@ const Maraton = () => {
               // Calculate average satisfaction
               let totalSatisfaction = 0;
               let totalStudents = 0;
-              assignmentResults.groups.forEach((group: any) => {
+              result.groups.forEach((group: any) => {
                 group.alumnos.forEach((alumno: any) => {
                   const { score, maxScore } = calculateMatchScore(alumno, group.tutores);
                   const satisfaction = maxScore > 0 ? (score / maxScore) * 100 : 0;
@@ -566,7 +699,7 @@ const Maraton = () => {
                 // Calculate and display average satisfaction
                 let totalSatisfaction = 0;
                 let totalStudents = 0;
-                assignmentResults.groups.forEach((group: any) => {
+                result.groups.forEach((group: any) => {
                   group.alumnos.forEach((alumno: any) => {
                     const { score, maxScore } = calculateMatchScore(alumno, group.tutores);
                     const satisfaction = maxScore > 0 ? (score / maxScore) * 100 : 0;
@@ -581,7 +714,7 @@ const Maraton = () => {
           </Box>
           <Box>
             <Typography variant="caption" color="text.secondary">Prom. Alumnos por Grupo</Typography>
-            <Typography variant="h6">{assignmentResults.statistics.avgGroupSize}</Typography>
+            <Typography variant="h6">{result.statistics.avgGroupSize}</Typography>
           </Box>
         </Box>
       </Box>
@@ -589,7 +722,7 @@ const Maraton = () => {
       {/* Groups Details */}
       <Box sx={{ flex: 1, overflow: 'auto' }}>
         {/* Tutor Warnings */}
-        {assignmentResults.tutorWarnings && assignmentResults.tutorWarnings.length > 0 && (
+        {result.tutorWarnings && result.tutorWarnings.length > 0 && (
           <Box sx={{ mb: 3, bgcolor: '#ff980029', borderRadius: 1, border: '1px solid', borderColor: 'warning.main' }}>
             <Box
               sx={{
@@ -612,7 +745,7 @@ const Maraton = () => {
               }}
             >
               <Typography variant="h6" sx={{ color: 'warning.dark' }}>
-                ⚠️ Advertencias de Tutores ({assignmentResults.tutorWarnings.length})
+                ⚠️ Advertencias de Tutores ({result.tutorWarnings.length})
               </Typography>
               <Typography
                 id="tutor-warnings-arrow"
@@ -635,7 +768,7 @@ const Maraton = () => {
               }}
             >
               <Box>
-                {assignmentResults.tutorWarnings.map((warning: string, index: number) => (
+                {result.tutorWarnings.map((warning: string, index: number) => (
                   <Typography key={index} variant="body2" sx={{ mb: 1, color: 'warning.dark' }}>
                     • {warning}
                   </Typography>
@@ -676,7 +809,7 @@ const Maraton = () => {
             }}
           >
             <Typography variant="h6">
-              👥 Grupos Formados ({assignmentResults.groups.length})
+              👥 Grupos Formados ({result.groups.length})
             </Typography>
             <Typography
               id="groups-arrow"
@@ -698,7 +831,7 @@ const Maraton = () => {
             }}
           >
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-              {assignmentResults.groups.map((group: any) => (
+              {result.groups.map((group: any) => (
                 <Box key={group.id} sx={{
                   p: 2,
                   border: '1px solid',
@@ -798,7 +931,7 @@ const Maraton = () => {
             }}
           >
             <Typography variant="h6">
-              🏆 Ranking de Satisfacción ({assignmentResults.groups.reduce((total: number, group: any) => total + group.alumnos.length, 0)} estudiantes)
+              🏆 Ranking de Satisfacción ({result.groups.reduce((total: number, group: any) => total + group.alumnos.length, 0)} estudiantes)
             </Typography>
             <Typography
               id="ranking-arrow"
@@ -834,7 +967,7 @@ const Maraton = () => {
 
                 // Uses the main calculateSimilarity function
 
-                const tutorFullNames = tutoresData.map(t => ({
+                const tutorFullNames = tutoresData.map((t: any) => ({
                   original: `${t.Nombre} ${t.Apellido}`,
                   normalized: normalizeName(`${t.Nombre} ${t.Apellido}`),
                   firstName: t.Nombre,
@@ -843,7 +976,7 @@ const Maraton = () => {
                 const validTutorNames = tutorFullNames.map(t => t.original);
 
 
-                assignmentResults.groups.forEach((group: any) => {
+                result.groups.forEach((group: any) => {
                   group.alumnos.forEach((alumno: any) => {
                     const { score, maxScore } = calculateMatchScore(alumno, group.tutores);
                     const satisfaction = maxScore > 0 ? (score / maxScore) * 100 : 0;
@@ -1022,13 +1155,13 @@ const Maraton = () => {
                 // Uses the main normalizeName function
 
                 // Count selections and matches for each tutor
-                const validTutorNames = tutoresData.map(t => `${t.Nombre} ${t.Apellido}`);
+                const validTutorNames = tutoresData.map((t: any) => `${t.Nombre} ${t.Apellido}`);
 
                 validTutorNames.forEach(tutorName => {
                   let selectedCount = 0;
                   let matchedCount = 0;
 
-                  assignmentResults.groups.forEach((group: any) => {
+                  result.groups.forEach((group: any) => {
                     group.alumnos.forEach((alumno: any) => {
                       for (let i = 1; i <= 5; i++) {
                         const tutorPref = alumno[`Tutor${i}`];
@@ -1181,5 +1314,6 @@ export default function App() {
       {selectedSection === 'tutorias' && <Tutorias />}
       {selectedSection === 'maraton' && <Maraton />}
     </Box>
+    <OptimizationProgressModal />
   </Box>);
 }

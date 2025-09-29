@@ -6,7 +6,7 @@ interface Warnings {
   tutoresNotFound: { alumno: string; tutor: string, closest: string, score: number }[];
 }
 
-interface Parameters {
+interface OptimizationParameters {
   // Genetic algorithm parameters, n should be at least 20-30, ideally 2-5x the chromosome length
   // Keep n x iterations < 1M
   seed: number;
@@ -28,19 +28,62 @@ interface Parameters {
   pesoRelativoTutores: number[];
 }
 
+interface Tutor { nombre: string, apellido: string, email: string, id: number }
+
+interface Alumno { nombre: string, apellido: string, email: string, value: number, tutores: Tutor[], id: number }
+
+interface Grupo { tutores: Tutor[], alumnos: Alumno[] };
+
+
+interface Individual {
+  parentA: string | null;
+  parentB: string | null;
+  generation: number;
+  extintGeneration: number | null;
+  alumnosIds: number[];
+  grupos: Grupo[];
+  fitness: number;
+};
+
+interface Generation {
+  i: number;
+  inititialTime: number;
+  endTime: number | null;
+
+  individuals: string[];
+  tournments: {
+    groupA: string[];
+    groupB: string[];
+    result: {
+      parentA: string;
+      parentB: string;
+      offspring: string;
+      crossover: boolean;
+    }
+  }[];
+
+  shuffleRepeats: number;
+
+  // Fitness statistics
+  bestFitness: number;
+  worstFitness: number;
+  averageFitness: number;
+};
+interface History {
+  inititialTime: number;
+  endTime: number | null;
+
+  champion: Individual;
+  worst: Individual;
+  individuals: { [key: string]: Individual };
+  populationZero: string[];
+  generations: Generation[];
+};
+
 interface Result {
   warnings: Warnings;
-  grupos: any[];
-  statistics: {
-    parameters: Parameters;
-    elapsedTimeMs: number;
-    totalAlumnos: number;
-    totalAssigned: number;
-    unassigned: number;
-    totalScore: number;
-    perfectFitness: number;
-    maxTeoricalFitness: number;
-  }
+  history: History;
+  parameters: OptimizationParameters
 }
 
 interface AlumnoData { nombre: string, apellido: string, email: string, value: number, tutores: string[] }
@@ -61,13 +104,23 @@ interface AppState {
   sidebarOpen: boolean;
 
   // Algorithm parameters
-  parameters: Parameters;
+  parameters: OptimizationParameters;
 
   // Results
   running: boolean;
   runningPercentage: number;
-  result: any | null;
+  result: Result | null;
   optimizationError: string | null;
+
+  // Dynamic
+  generation: Generation | null,
+  totalIterations: number | null,
+  currentBestScore: number | null,
+  currentWorstScore: number | null,
+  perfectFitness: number | null,
+  maxTeoricalFitness: number | null,
+  combinations: number | null
+
 }
 
 const initialState: AppState = {
@@ -83,15 +136,15 @@ const initialState: AppState = {
 
   parameters: {
     seed: 42,
-    geneticIterations: 5,
-    populationSize: 10,
+    geneticIterations: 500,
+    populationSize: 100,
     mutationRate: 0.1,
     crossoverRate: 0.5,
     tournamentSize: 5,
     elitismCount: 2,
 
-    minCantidadGrupos: 1,
-    maxCantidadGrupos: 10,
+    minCantidadGrupos: 10,
+    maxCantidadGrupos: 30,
     minAlumnosPorGrupo: 1,
     maxAlumnosPorGrupo: 10,
     minTutoresPorGrupo: 1,
@@ -104,98 +157,14 @@ const initialState: AppState = {
   runningPercentage: 0,
   result: null,
   optimizationError: null,
-};
 
-const mulberry32 = (seed: number) => {
-  return function () {
-    let t = seed += 0x6D2B79F5;
-    t = Math.imul(t ^ t >>> 15, t | 1);
-    t ^= t + Math.imul(t ^ t >>> 7, t | 61);
-    return ((t ^ t >>> 14) >>> 0) / 4294967296;
-  };
-};
-
-const hashArray = (arr: number[]): string => {
-  return arr.join(',');
-};
-
-const shuffleArray = <T>(array: T[], seed: number): T[] => {
-  const random = mulberry32(seed);
-  const result = [...array];
-
-  for (let i = result.length - 1; i > 0; i--) {
-    const j = Math.floor(random() * (i + 1));
-    [result[i], result[j]] = [result[j], result[i]];
-  }
-
-  return result;
-};
-
-const normalizeName = (name: string) => {
-  if (!name) return '';
-  return name.toLowerCase()
-    .replace(/á/g, 'a')
-    .replace(/é/g, 'e')
-    .replace(/í/g, 'i')
-    .replace(/ó/g, 'o')
-    .replace(/ú/g, 'u')
-    .replace(/ñ/g, 'n')
-    .replace(/\s+/g, ' ')
-    .trim();
-};
-
-const calculateSimilarity = (str1: string, str2: string): number => {
-  const levenshteinDistance = (str1: string, str2: string): number => {
-    const m = str1.length;
-    const n = str2.length;
-    const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
-
-    for (let i = 0; i <= m; i++) dp[i][0] = i;
-    for (let j = 0; j <= n; j++) dp[0][j] = j;
-
-    for (let i = 1; i <= m; i++) {
-      for (let j = 1; j <= n; j++) {
-        if (str1[i - 1] === str2[j - 1]) {
-          dp[i][j] = dp[i - 1][j - 1];
-        } else {
-          dp[i][j] = Math.min(
-            dp[i - 1][j] + 1,    // deletion
-            dp[i][j - 1] + 1,    // insertion
-            dp[i - 1][j - 1] + 1 // substitution
-          );
-        }
-      }
-    }
-    return dp[m][n];
-  };
-
-  if (!str1 || !str2) return 0;
-
-  const normalizedStr1 = normalizeName(str1);
-  const normalizedStr2 = normalizeName(str2);
-
-  // Exact match after normalization
-  if (normalizedStr1 === normalizedStr2) return 1.0;
-
-  // Check for abbreviation match first (higher priority than Levenshtein)
-  // const parts1 = normalizedStr1.split(' ');
-  // const parts2 = normalizedStr2.split(' ');
-  // if (parts1.length >= 2 && parts2.length >= 2) {
-  //   const lastNameMatch = parts1[parts1.length - 1] === parts2[parts2.length - 1];
-  //   const firstInitialMatch = parts1[0].charAt(0) === parts2[0].charAt(0);
-  //   if (lastNameMatch && parts1[0].length <= 2 && firstInitialMatch) {
-  //     return 0.95; // High similarity for abbreviations
-  //   }
-  // }
-
-  // Calculate Levenshtein similarity for other cases
-  const maxLen = Math.max(normalizedStr1.length, normalizedStr2.length);
-  if (maxLen === 0) return 1.0;
-
-  const distance = levenshteinDistance(normalizedStr1, normalizedStr2);
-  const similarity = 1 - (distance / maxLen);
-
-  return Math.max(0, similarity);
+  generation: null,
+  totalIterations: null,
+  currentBestScore: null,
+  currentWorstScore: null,
+  perfectFitness: null,
+  maxTeoricalFitness: null,
+  combinations: null
 };
 
 // Import the worker using Vite's worker syntax
@@ -203,29 +172,31 @@ import OptimizerWorker from '../optimizer.worker.ts?worker';
 
 export const optimizeGroups = createAsyncThunk(
   'app/optimizeGroups',
-  async (payload, { getState, rejectWithValue }) => {
+  async (payload, { getState, rejectWithValue, dispatch }) => {
     console.log("optimizeGroups")
-      return new Promise((resolve, reject) => {
-        const worker = new OptimizerWorker();
-
-        worker.onmessage = (e) => {
-          console.log("onmessage:", e.data);
-
-          if (e.data.type === "error") {
-            reject(new Error(e.data.error));
-          } else {
-            resolve(e.data);
-          }
+    return new Promise((resolve, reject) => {
+      const worker = new OptimizerWorker();
+      let state = getState() as AppState;
+      worker.onmessage = (e) => {
+        if (e.data.type === "error") {
+          reject(new Error(e.data.error));
+        } else if (e.data.type === "update") {
+          dispatch(appSlice.actions.optimizationUpdate(e.data.payload));
+        } else if (e.data.type === "finish") {
+          resolve(e.data);
           worker.terminate(); // Clean up the worker
+          state = { ...state, running: false }
+
         };
-        worker.onerror = (e) => {
-          console.log("onerror:", e);
-          reject(new Error('Worker failed to load or execute'));
-          worker.terminate();
-        };
-        worker.postMessage(getState());
-      });
-    }
+      }
+      worker.onerror = (e) => {
+        console.log("onerror:", e);
+        reject(new Error('Worker failed to load or execute'));
+        worker.terminate();
+      };
+      worker.postMessage(state);
+    });
+  }
 );
 
 const appSlice = createSlice({
@@ -256,13 +227,26 @@ const appSlice = createSlice({
     },
 
     // Parameter actions
-    setParameters: (state, action: PayloadAction<Partial<Parameters>>) => {
+    setParameters: (state, action: PayloadAction<Partial<OptimizationParameters>>) => {
       state.parameters = { ...state.parameters, ...action.payload };
     },
 
     // Clear actions
     clearOptimizationError: (state) => {
       state.optimizationError = null;
+    },
+
+    optimizationUpdate: (state, action: PayloadAction<any>) => {
+      const { generation, totalIterations, currentBestScore, currentWorstScore, perfectFitness, maxTeoricalFitness, runningPercentage, combinations } = action.payload;
+      state.running = true;
+      state.runningPercentage = runningPercentage;
+      state.generation = generation;
+      state.totalIterations = totalIterations;
+      state.currentBestScore = currentBestScore;
+      state.currentWorstScore = currentWorstScore;
+      state.perfectFitness = perfectFitness;
+      state.maxTeoricalFitness = maxTeoricalFitness;
+      state.combinations = combinations;
     }
 
   },
@@ -276,7 +260,7 @@ const appSlice = createSlice({
       .addCase(optimizeGroups.fulfilled, (state, action) => {
         state.running = false;
         state.runningPercentage = 1;
-        state.result = action.payload;
+        state.result = action.payload as Result;
       })
       .addCase(optimizeGroups.rejected, (state, action) => {
         state.running = false;

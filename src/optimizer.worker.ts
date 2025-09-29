@@ -26,19 +26,62 @@ interface OptimizationParameters {
     pesoRelativoTutores: number[];
 }
 
+interface Tutor { nombre: string, apellido: string, email: string, id: number }
+
+interface Alumno { nombre: string, apellido: string, email: string, value: number, tutores: Tutor[], id: number }
+
+interface Grupo { tutores: Tutor[], alumnos: Alumno[] };
+
+
+interface Individual {
+    parentA: string | null;
+    parentB: string | null;
+    generation: number;
+    extintGeneration: number | null;
+    alumnosIds: number[];
+    grupos: Grupo[];
+    fitness: number;
+};
+
+interface Generation {
+    i: number;
+    inititialTime: number;
+    endTime: number | null;
+
+    individuals: string[];
+    tournments: {
+        groupA: string[];
+        groupB: string[];
+        result: {
+            parentA: string;
+            parentB: string;
+            offspring: string;
+            crossover: boolean;
+        }
+    }[];
+
+    shuffleRepeats: number;
+
+    // Fitness statistics
+    bestFitness: number;
+    worstFitness: number;
+    averageFitness: number;
+};
+interface History {
+    inititialTime: number;
+    endTime: number | null;
+
+    champion: Individual;
+    worst: Individual;
+    individuals: { [key: string]: Individual };
+    populationZero: string[];
+    generations: Generation[];
+};
+
 interface Result {
     warnings: Warnings;
-    grupos: any[];
-    statistics: {
-        parameters: OptimizationParameters;
-        elapsedTimeMs: number;
-        totalAlumnos: number;
-        totalAssigned: number;
-        unassigned: number;
-        totalScore: number;
-        perfectFitness: number;
-        maxTeoricalFitness: number;
-    }
+    history: History;
+    parameters: OptimizationParameters
 }
 
 interface AlumnoData { nombre: string, apellido: string, email: string, value: number, tutores: string[] }
@@ -165,56 +208,9 @@ console.log('Worker script loaded successfully!');
 self.onmessage = (e) => {
     console.log('Worker received message from main thread:', !!e.data);
 
-    interface Tutor { nombre: string, apellido: string, email: string, id: number }
 
-    interface Alumno { nombre: string, apellido: string, email: string, value: number, tutores: Tutor[], id: number }
 
-    interface Grupo { tutores: Tutor[], alumnos: Alumno[] };
 
-    interface Individual {
-        parentA: string | null;
-        parentB: string | null;
-        generation: number;
-        extintGeneration: number | null;
-        alumnosIds: number[];
-        grupos: Grupo[];
-        fitness: number;
-    };
-
-    interface Generation {
-        inititialTime: number;
-        endTime: number | null;
-
-        individuals: string[];
-        tournments: {
-            groupA: string[];
-            groupB: string[];
-            result: {
-                parentA: string;
-                parentB: string;
-                offspring: string;
-                crossover: boolean;
-            }
-        }[];
-
-        shuffleRepeats: number;
-
-        // Fitness statistics
-        bestFitness: number;
-        worstFitness: number;
-        averageFitness: number;
-    };
-
-    interface History {
-
-        inititialTime: number;
-        endTime: number | null;
-
-        champion: Individual;
-        individuals: { [key: string]: Individual };
-        populationZero: string[];
-        generations: Generation[];
-    };
 
     const prepareData = (alumnosData: AlumnoData[], tutoresData: TutorData[], parameters: OptimizationParameters): { alumnos: Alumno[], tutores: Tutor[], warnings: Warnings } => {
         const warnings: Warnings = { others: [], unassignedAlumnos: [], tutoresNotFound: [] };
@@ -434,18 +430,20 @@ self.onmessage = (e) => {
             endTime: null,
             individuals,
             champion: Object.entries(individuals).sort((a, b) => b[1].fitness - a[1].fitness)[0][1],
+            worst: Object.entries(individuals).sort((a, b) => a[1].fitness - b[1].fitness)[0][1],
             populationZero: Object.keys(individuals),
             generations: [],
         };
     };
 
-    const iterate = (history: History, alumnos: Alumno[], tutores: Tutor[], parameters: OptimizationParameters, rng: Function) => {
+    const iterate = (history: History, alumnos: Alumno[], tutores: Tutor[], parameters: OptimizationParameters, rng: Function, i: number) => {
         // Get current population (alive individuals)
         const currentPopulation = history.generations.length === 0
             ? history.populationZero
             : history.generations[history.generations.length - 1].individuals;
 
         const generation: Generation = {
+            i,
             inititialTime: Date.now(),
             endTime: null,
             individuals: [],
@@ -572,12 +570,19 @@ self.onmessage = (e) => {
         generation.averageFitness = generationFitnesses.reduce((sum, fitness) => sum + fitness, 0) / generationFitnesses.length;
 
         // Update champion
-        const newChampion = generation.individuals
+
+        const ranking = generation.individuals
             .map(hash => history.individuals[hash])
-            .sort((a, b) => b.fitness - a.fitness)[0];
+            .sort((a, b) => b.fitness - a.fitness)
+
+        const newChampion = ranking[0];
+        const newWorst = ranking[ranking.length - 1];
 
         if (newChampion.fitness > history.champion.fitness) {
             history.champion = newChampion;
+        }
+        if (newWorst.fitness < history.worst.fitness) {
+            history.worst = newWorst;
         }
 
         generation.endTime = Date.now();
@@ -656,26 +661,43 @@ self.onmessage = (e) => {
     try {
         console.log('Optimization process started with state:', e);
         const state = e.data as { app: AppState };
-        
+
         const { alumnosData, tutoresData, parameters } = state.app;
         const { alumnos, tutores, warnings } = prepareData(alumnosData, tutoresData, parameters);
         const { perfectFitness, maxTeoricalFitness } = getMaxScores(alumnos, parameters);
 
         console.log('Starting genetic algorithm with:', { alumnosData, tutoresData, parameters, alumnos, tutores, warnings, perfectFitness, maxTeoricalFitness });
         let currentBestScore = 0;
+        let currentWorstScore = 0;
         const rng = mulberry32(parameters.seed || 42);
         console.log('RNG initialized with seed', parameters.seed);
         let history = initHistory(alumnos, tutores, parameters, rng);
         let percentageCompleted = 0;
         console.log({ alumnos, tutores, parameters, perfectFitness, maxTeoricalFitness });
         for (let i = 0; i < parameters.geneticIterations && currentBestScore < perfectFitness; i++) {
-            iterate(history, alumnos, tutores, parameters, rng);
+            iterate(history, alumnos, tutores, parameters, rng, i + 1);
             currentBestScore = history.champion.fitness;
+            currentWorstScore = history.worst.fitness;
             percentageCompleted = (i + 1) / parameters.geneticIterations;
 
             const lastGen = history.generations[history.generations.length - 1];
             console.log(`Iteration ${i + 1}/${parameters.geneticIterations} - ${Math.round(percentageCompleted * 100)}% completed`);
             console.log(`  Generation stats - Best: ${lastGen.bestFitness.toFixed(4)}, Worst: ${lastGen.worstFitness.toFixed(4)}, Avg: ${lastGen.averageFitness.toFixed(4)}`);
+            self.postMessage({
+                type: "update",
+                payload: {
+                    combinations: Object.keys(history.individuals).length,
+                    runningPercentage: percentageCompleted,
+                    generation: lastGen,
+                    best: history.champion,
+                    worst: history.worst,
+                    totalIterations: parameters.geneticIterations,
+                    currentBestScore,
+                    currentWorstScore,
+                    perfectFitness,
+                    maxTeoricalFitness
+                }
+            });
         }
 
         history.endTime = Date.now();
@@ -685,23 +707,10 @@ self.onmessage = (e) => {
 
         self.postMessage({
             type: "finish",
-            warnings,
-            grupos: history.champion.grupos,
-            statistics: {
+            payload: {
+                warnings,
+                history,
                 parameters,
-                elapsedTimeMs: history.endTime - history.inititialTime,
-                totalAlumnos: alumnos.length,
-                totalAssigned: alumnos.length - warnings.unassignedAlumnos.length,
-                unassigned: warnings.unassignedAlumnos.length,
-                totalScore: history.champion.fitness,
-                perfectFitness,
-                maxTeoricalFitness,
-                generationsEvolved: history.generations.length,
-                fitnessEvolution: history.generations.map(gen => ({
-                    best: gen.bestFitness,
-                    worst: gen.worstFitness,
-                    average: gen.averageFitness
-                }))
             }
         });
     } catch (error) {

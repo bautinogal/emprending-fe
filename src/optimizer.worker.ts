@@ -208,10 +208,6 @@ console.log('Worker script loaded successfully!');
 self.onmessage = (e) => {
     console.log('Worker received message from main thread:', !!e.data);
 
-
-
-
-
     const prepareData = (alumnosData: AlumnoData[], tutoresData: TutorData[], parameters: OptimizationParameters): { alumnos: Alumno[], tutores: Tutor[], warnings: Warnings } => {
         const warnings: Warnings = { others: [], unassignedAlumnos: [], tutoresNotFound: [] };
         const tutores = tutoresData.map((tutor, i) => ({

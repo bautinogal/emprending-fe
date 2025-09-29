@@ -4,7 +4,7 @@ interface Warnings {
     tutoresNotFound: { alumno: string; tutor: string, closest: string, score: number }[];
 }
 
-interface Parameters {
+interface OptimizationParameters {
     // Genetic algorithm parameters, n should be at least 20-30, ideally 2-5x the chromosome length
     // Keep n x iterations < 1M
     seed: number;
@@ -30,7 +30,7 @@ interface Result {
     warnings: Warnings;
     grupos: any[];
     statistics: {
-        parameters: Parameters;
+        parameters: OptimizationParameters;
         elapsedTimeMs: number;
         totalAlumnos: number;
         totalAssigned: number;
@@ -59,7 +59,7 @@ interface AppState {
     sidebarOpen: boolean;
 
     // Algorithm parameters
-    parameters: Parameters;
+    parameters: OptimizationParameters;
 
     // Results
     running: boolean;
@@ -160,7 +160,10 @@ const calculateSimilarity = (str1: string, str2: string): number => {
     return Math.max(0, similarity);
 };
 
+console.log('Worker script loaded successfully!');
+
 self.onmessage = (e) => {
+    console.log('Worker received message from main thread:', !!e.data);
 
     interface Tutor { nombre: string, apellido: string, email: string, id: number }
 
@@ -213,7 +216,7 @@ self.onmessage = (e) => {
         generations: Generation[];
     };
 
-    const prepareData = (alumnosData: AlumnoData[], tutoresData: TutorData[], parameters: Parameters): { alumnos: Alumno[], tutores: Tutor[], warnings: Warnings } => {
+    const prepareData = (alumnosData: AlumnoData[], tutoresData: TutorData[], parameters: OptimizationParameters): { alumnos: Alumno[], tutores: Tutor[], warnings: Warnings } => {
         const warnings: Warnings = { others: [], unassignedAlumnos: [], tutoresNotFound: [] };
         const tutores = tutoresData.map((tutor, i) => ({
             ...Object.entries(tutor).reduce((p: any, [k, v]) => {
@@ -262,7 +265,7 @@ self.onmessage = (e) => {
         return { alumnos, tutores, warnings };
     };
 
-    const getMaxScores = (alumnos: Alumno[], parameters: Parameters): { perfectFitness: number, maxTeoricalFitness: number } => {
+    const getMaxScores = (alumnos: Alumno[], parameters: OptimizationParameters): { perfectFitness: number, maxTeoricalFitness: number } => {
         const perfectFitness = alumnos.reduce((p, x) =>
             p + x.tutores
                 .reduce((pr, _y, i) => pr + x.value * parameters.pesoRelativoTutores[i], 0),
@@ -277,7 +280,7 @@ self.onmessage = (e) => {
         return { perfectFitness, maxTeoricalFitness };
     };
 
-    const calculateFitness = (grupos: Grupo[], alumnos: Alumno[], parameters: Parameters): number => {
+    const calculateFitness = (grupos: Grupo[], alumnos: Alumno[], parameters: OptimizationParameters): number => {
         let fitness = 0;
         let penalty = 0;
 
@@ -313,7 +316,7 @@ self.onmessage = (e) => {
         return Math.max(0, fitness - penalty);
     };
 
-    const calculateGrupos = (individual: number[], alumnos: Alumno[], tutores: Tutor[], parameters: Parameters): Grupo[] => {
+    const calculateGrupos = (individual: number[], alumnos: Alumno[], tutores: Tutor[], parameters: OptimizationParameters): Grupo[] => {
 
         const getGroups = (groupsN: number): { grupos: Grupo[], fitness: number } => {
 
@@ -382,7 +385,7 @@ self.onmessage = (e) => {
         return posibleResults.sort((a, b) => b.fitness - a.fitness)[0].grupos;
     };
 
-    const initHistory = (alumnos: Alumno[], tutores: Tutor[], parameters: Parameters, rng: Function): History => {
+    const initHistory = (alumnos: Alumno[], tutores: Tutor[], parameters: OptimizationParameters, rng: Function): History => {
 
         const alumnosIds = alumnos.map(x => x.id);
         const individuals: { [key: string]: Individual } = {};
@@ -436,7 +439,7 @@ self.onmessage = (e) => {
         };
     };
 
-    const iterate = (history: History, alumnos: Alumno[], tutores: Tutor[], parameters: Parameters, rng: Function) => {
+    const iterate = (history: History, alumnos: Alumno[], tutores: Tutor[], parameters: OptimizationParameters, rng: Function) => {
         // Get current population (alive individuals)
         const currentPopulation = history.generations.length === 0
             ? history.populationZero
@@ -651,8 +654,9 @@ self.onmessage = (e) => {
     };
 
     try {
+        console.log('Optimization process started with state:', e);
         const state = e.data as { app: AppState };
-        console.log('Optimization process started with state:', state.app);
+        
         const { alumnosData, tutoresData, parameters } = state.app;
         const { alumnos, tutores, warnings } = prepareData(alumnosData, tutoresData, parameters);
         const { perfectFitness, maxTeoricalFitness } = getMaxScores(alumnos, parameters);
@@ -679,7 +683,8 @@ self.onmessage = (e) => {
         console.log('Optimization process finished:', { history, currentBestScore, perfectFitness, maxTeoricalFitness });
         console.log('Best individuals:', Object.entries(history.individuals).sort((a, b) => (b[1].fitness || 0) - (a[1].fitness || 0)).map(x => x[1]));
 
-        return {
+        self.postMessage({
+            type: "finish",
             warnings,
             grupos: history.champion.grupos,
             statistics: {
@@ -698,12 +703,14 @@ self.onmessage = (e) => {
                     average: gen.averageFitness
                 }))
             }
-        };
-
+        });
     } catch (error) {
         console.error('Error optimizing groups:', error);
-        return rejectWithValue(error instanceof Error ? error.message : 'Optimization failed');
+        self.postMessage({
+            type: "error",
+            error: error instanceof Error ? error.message : 'Optimization failed'
+        });
     }
 
-    self.postMessage({ type: "finish", payload: result });
+
 };

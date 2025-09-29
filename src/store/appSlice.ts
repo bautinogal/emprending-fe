@@ -183,7 +183,7 @@ export const optimizeGroups = createAsyncThunk(
         } else if (e.data.type === "update") {
           dispatch(appSlice.actions.optimizationUpdate(e.data.payload));
         } else if (e.data.type === "finish") {
-          resolve(e.data);
+          resolve(e.data.payload);
           worker.terminate(); // Clean up the worker
           state = { ...state, running: false }
 
@@ -258,6 +258,7 @@ const appSlice = createSlice({
         state.optimizationError = null;
       })
       .addCase(optimizeGroups.fulfilled, (state, action) => {
+        console.log("Optimization finished, payload:", action.payload)
         state.running = false;
         state.runningPercentage = 1;
         state.result = action.payload as Result;

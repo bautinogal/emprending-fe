@@ -654,7 +654,7 @@ const Maraton = () => {
     const tutoresData = useSelector((state: RootState) => state.app.tutoresData);
     const pesoRelativoTutores = useSelector((state: RootState) => state.app.parameters.pesoRelativoTutores);
     const similarityThreshold = useSelector((state: RootState) => state.app.parameters.similarityThreshold);
-
+    const maxTeoricalFitness = useSelector((state: RootState) => state.app.maxTeoricalFitness);
     // Helper functions
     const normalizeName = (name: string) => {
       if (!name) return '';
@@ -829,14 +829,19 @@ const Maraton = () => {
             </Box>
             <Box>
               <Typography variant="caption" color="text.secondary">Satisfacción Total</Typography>
-              <Typography variant="h6" color="primary.main">
+              <Typography variant="h6" fontWeight={600} color={
+                (() => {
+                  let coef = champion.fitness / (maxTeoricalFitness || 0);
+                  if (coef > 0.8) return 'success.main';
+                  if (coef > 0.6) return '#FFC107';
+                  if (coef > 0.5) return 'warning.main';
+                  if (coef > 0.25) return 'error.main';
+                  return 'error.main';
+                })()
+              }>
                 {(() => {
                   if (!champion.fitness) return '0.0%';
-                  // Calculate percentage based on perfect fitness from result
-                  const perfectFitness = result.history.generations?.[0]?.individuals?.length > 0
-                    ? Math.max(...Object.values(result.history.individuals).map(ind => ind.fitness)) * 1.2 // Estimate perfect as 120% of max observed
-                    : champion.fitness * 1.2;
-                  const percentage = (champion.fitness / perfectFitness) * 100;
+                  const percentage = (champion.fitness / (maxTeoricalFitness || 0)) * 100;
                   return `${Math.min(percentage, 100).toFixed(1)}%`;
                 })()}
               </Typography>
@@ -956,85 +961,50 @@ const Maraton = () => {
                 ▼
               </Typography>
             </Box>
-            <Box
-              id="groups-content"
-              sx={{
-                p: 2,
-                pt: 0,
-                display: 'block'
-              }}
-            >
+            <Box id="groups-content" sx={{ p: 2, pt: 0, display: 'block' }} >
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-                {displayGrupos.map((group: any) => (
-                  <Box key={group.id} sx={{
-                    p: 2,
-                    border: '1px solid',
-                    borderColor: 'divider',
-                    borderRadius: 1,
-                    bgcolor: 'background.paper'
-                  }}>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                      <Typography variant="subtitle1" fontWeight={600}>
-                        {group.name}
+                {result.history.champion.grupos.map((grupo, i) => {
+                  const alumnos = grupo.alumnos || [];
+                  return (<Box key={alumnos.map(x => x.nombre + ' ' + x.apellido).join(',')} sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1, bgcolor: 'background.paper' }}>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', alignItems: 'start', mb: 1 }}>
+                      <Typography variant="subtitle1" fontWeight={300}>
+                        <b>{"  Grupo " + (i + 1)}</b> ({alumnos.length})
                       </Typography>
-                      <Typography variant="body2" color="text.secondary">
-                        {group.alumnos.length} / {group.maxCapacity} alumnos
-                      </Typography>
-                    </Box>
+                      <Box sx={{ mb: 1, display: 'ruby', flexDirection: 'row' }}>
+                        <Typography fontWeight={600} variant="body2" color="text.secondary" sx={{ mb: 0.5, paddingRight: 1 }}>
+                          Tutores:
+                        </Typography>
+                        <Typography variant="body2" fontWeight={600} sx={{ paddingRight: 1 }}>
+                          {grupo.tutores.map(x => x.nombre + ' ' + x.apellido).join(', ')}
+                        </Typography>
+                      </Box>
 
-                    <Box sx={{ mb: 1 }}>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                        Tutores:
-                      </Typography>
-                      <Typography variant="body2">
-                        {group.tutores.join(', ')}
-                      </Typography>
-                    </Box>
-
-                    {group.alumnos.length > 0 && (
-                      <Box>
-                        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                      <Box sx={{ mb: 1, display: 'ruby', flexDirection: 'row' }}>
+                        <Typography fontWeight={600} variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
                           Alumnos:
                         </Typography>
-                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                          {group.alumnos.map((alumno: any, index: number) => {
-                            // Find the original CSV data for this alumno
-                            const originalAlumno = alumnosData.find((a: any) =>
-                              a.Nombre === alumno.nombre && a.Apellido === alumno.apellido && a.Email === alumno.email
-                            ) as any;
-                            const { score, maxScore } = calculateMatchScore(originalAlumno || alumno, group.tutores);
-                            const percentage = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
-
-                            return (
-                              <Box key={index} sx={{
-                                px: 1,
-                                py: 0.5,
-                                bgcolor: 'grey.100',
-                                borderRadius: 0.5,
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 1
-                              }}>
-                                <Typography variant="body2">
-                                  {alumno.nombre} {alumno.apellido}
-                                </Typography>
-                                <Typography variant="caption" sx={{
-                                  color: percentage >= 75 ? 'success.main' :
-                                    percentage >= 50 ? '#FFC107' :
-                                      percentage >= 25 ? 'warning.dark' :
-                                        'error.main',
-                                  fontWeight: 600
-                                }}>
-                                  ({score}/{maxScore})
-                                </Typography>
-                              </Box>
-                            );
-                          })}
-                        </Box>
+                        {grupo.alumnos.map(x => {
+                          const score = x.tutores.reduce((sum, _, idx) => sum + (grupo.tutores.map(x => x.id).includes(x.tutores[idx].id) ? (pesoRelativoTutores[idx] || 0) : 0), 0);
+                          const maxScore = x.tutores.reduce((sum, _, idx) => sum + (pesoRelativoTutores[idx] || 0), 0);
+                          let color = 'text.primary';
+                          if (score / maxScore >= 0.75) color = 'success.main';
+                          else if (score / maxScore >= 0.5) color = '#FFC107';
+                          else if (score / maxScore >= 0.25) color = 'warning.dark';
+                          else color = 'error.main';
+                          return (<Box key={x.nombre + ' ' + x.apellido + x.email} display='ruby' flexDirection='row' sx={{ mb: 1, paddingRight: 1, borderRadius: 1, px: 1, py: 0.5, mr: 1, display: 'inline-flex', alignItems: 'center', backgroundColor: 'grey.100', ml: 1, }}>
+                            <Typography variant="body2" sx={{ paddingRight: 0.5 }}>
+                              {x.nombre + ' ' + x.apellido + ' '}
+                            </Typography>
+                            <Typography variant="body2" fontWeight={600} sx={{ fontSize: '0.75rem', fontWeight: 600, color }}>
+                              ({score} / {maxScore})
+                            </Typography>
+                          </Box>);
+                        })}
                       </Box>
-                    )}
+                    </Box>
                   </Box>
-                ))}
+                  );
+                })}
               </Box>
             </Box>
           </Box>

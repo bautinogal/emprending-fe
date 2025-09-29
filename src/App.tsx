@@ -3,11 +3,11 @@ import { useSelector, useDispatch } from 'react-redux'
 import './App.css'
 
 import * as React from 'react';
-import { Box, Button, Divider, Drawer, IconButton, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Tab, Tabs, Typography } from '@mui/material';
+import { Box, Button, Divider, Drawer, TextField, IconButton, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Tab, Tabs, Typography } from '@mui/material';
 import { ChevronLeft as ChevronLeftIcon, Download as DownloadIcon, Groups as GroupsIcon, Menu as MenuIcon, School as SchoolIcon, UploadFile as UploadFileIcon } from '@mui/icons-material';
 import { DataGrid, type GridColDef } from '@mui/x-data-grid';
 import { RootState, AppDispatch } from './store/store';
-import { setParameters, optimizeGroups } from './store/appSlice';
+import { setParameters, setFile, optimizeGroups } from './store/appSlice';
 
 const CustomTabPanel = (props: { children?: React.ReactNode; index: string; value: string; }) => {
   const { children, value, index, ...other } = props;
@@ -40,779 +40,95 @@ const Tutorias = () => {
   );
 };
 
-const Parametros = ({ canRecalculate, tutoresData, alumnosData }: any) => {
-  const dispatch = useDispatch<AppDispatch>();
-  const parameters = useSelector((state: RootState) => state.app.parameters);
-
-  const {
-    seed,
-    geneticIterations,
-    populationSize,
-    mutationRate,
-    crossoverRate,
-    tournamentSize,
-    elitismCount,
-    minCantidadGrupos,
-    maxCantidadGrupos,
-    maximosAlumnosPorGrupo,
-    similarityThreshold,
-    pesoRelativoTutores
-  } = parameters;
-
-  const onRecalculate = () => {
-    console.log('Handle Recalculate triggered');
-
-    dispatch(optimizeGroups({
-      alumnosData: alumnosData.map((a: any) => ({
-        nombre: a.Nombre || a.nombre,
-        apellido: a.Apellido || a.apellido,
-        email: a.Email || a.email,
-        value: a.Puntaje || a.puntaje,
-        tutores: Object.entries(a).filter((x: [string, any]) => x[0].toLowerCase().includes("tutor") && x[1] != "").map((x: [string, any]) => x[1])
-      })) as any[],
-      tutoresData: tutoresData.map((a: any) => ({
-        nombre: a.Nombre || a.nombre,
-        apellido: a.Apellido || a.apellido,
-      })) as any[],
-      parameters: {
-        seed: 42,
-        geneticIterations: 5, // 5 - 100
-        populationSize: 50, // < 2^n
-        mutationRate: 0.1, // 0.05-0.2 typical (10% chance)
-        crossoverRate: 0.5, // 0.6-0.9 typical (70% chance)
-        tournamentSize: 5, // < n / 2 //  2-3 for exploration, 4-5 for exploitation
-        elitismCount: 2, // 0 - 1 // 2-5% of population size
-
-        // Assignment parameters
-        minCantidadGrupos: 1,
-        maxCantidadGrupos: 10,
-        maximosAlumnosPorGrupo: 30,
-        similarityThreshold: 0.5,
-        pesoRelativoTutores: [8, 5, 3, 2, 1]
-      }
-    } as any));
-    if (alumnosData.length === 0 || tutoresData.length === 0) {
-      alert('Por favor, carga los archivos CSV de tutores y alumnos antes de recalcular.');
-      return;
-    }
-  }
-
-  const handlePesoChange = (index: number, value: string) => {
-    const newPesos = [...pesoRelativoTutores];
-    newPesos[index] = Number(value);
-    dispatch(setParameters({ pesoRelativoTutores: newPesos }));
-  };
-
-  return <Box sx={{ p: 3, overflowY: 'auto', height: '100%' }}>
-    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-      <Typography variant="h5" fontWeight={600}>
-        Parámetros de la Maratón
-      </Typography>
-      <Button
-        variant="contained"
-        onClick={onRecalculate}
-        disabled={!canRecalculate}
-        sx={{ bgcolor: 'primary.main' }}
-      >
-        Recalcular Grupos
-      </Button>
-    </Box>
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, maxWidth: 400 }}>
-      <Box>
-        <Typography variant="body1" sx={{ mb: 1 }}>
-          Mínima Cantidad de Grupos
-        </Typography>
-        <input
-          type="number"
-          value={minCantidadGrupos}
-          onChange={(e) => dispatch(setParameters({ minCantidadGrupos: Number(e.target.value) }))}
-          min="1"
-          style={{
-            padding: '8px 12px',
-            border: '1px solid #ccc',
-            borderRadius: '4px',
-            fontSize: '16px',
-            width: '100px'
-          }}
-        />
-      </Box>
-      <Box>
-        <Typography variant="body1" sx={{ mb: 1 }}>
-          Máxima Cantidad de Grupos
-        </Typography>
-        <input
-          type="number"
-          value={maxCantidadGrupos}
-          onChange={(e) => dispatch(setParameters({ maxCantidadGrupos: Number(e.target.value) }))}
-          min={minCantidadGrupos}
-          style={{
-            padding: '8px 12px',
-            border: '1px solid #ccc',
-            borderRadius: '4px',
-            fontSize: '16px',
-            width: '100px'
-          }}
-        />
-        {(tutoresData.length > 0 || alumnosData.length > 0) && maxCantidadGrupos > Math.min(tutoresData.length || Infinity, alumnosData.length || Infinity) && (
-          <Typography variant="caption" color="warning.main" sx={{ display: 'block', mt: 0.5 }}>
-            ⚠️ Máximo {Math.min(tutoresData.length || Infinity, alumnosData.length || Infinity)} grupos
-            (limitado por {tutoresData.length <= alumnosData.length ? 'tutores' : 'alumnos'}: {Math.min(tutoresData.length || Infinity, alumnosData.length || Infinity)})
-          </Typography>
-        )}
-      </Box>
-      <Box>
-        <Typography variant="body1" sx={{ mb: 1 }}>
-          Máximos Alumnos por Grupo
-        </Typography>
-        <input
-          type="number"
-          value={maximosAlumnosPorGrupo}
-          onChange={(e) => dispatch(setParameters({ maximosAlumnosPorGrupo: Number(e.target.value) }))}
-          style={{
-            padding: '8px 12px',
-            border: '1px solid #ccc',
-            borderRadius: '4px',
-            fontSize: '16px',
-            width: '100px'
-          }}
-        />
-      </Box>
-      <Box>
-        <Typography variant="body1" sx={{ mb: 1 }}>
-          Peso relativo tutores
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 1 }}>
-          {pesoRelativoTutores.map((peso: number, index: number) => (
-            <Box key={index}>
-              <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>
-                Tutor {index + 1}
-              </Typography>
-              <input
-                type="number"
-                value={peso}
-                onChange={(e) => handlePesoChange(index, e.target.value)}
-                style={{
-                  padding: '8px 12px',
-                  border: '1px solid #ccc',
-                  borderRadius: '4px',
-                  fontSize: '16px',
-                  width: '60px'
-                }}
-              />
-            </Box>
-          ))}
-        </Box>
-      </Box>
-      <Box>
-        <Typography variant="body1" sx={{ mb: 1 }}>
-          Sensibilidad de coincidencia de nombres: {(similarityThreshold * 100).toFixed(0)}%
-        </Typography>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Typography variant="caption">Estricto</Typography>
-          <input
-            type="range"
-            min="0"
-            max="100"
-            value={similarityThreshold * 100}
-            onChange={(e) => dispatch(setParameters({ similarityThreshold: Number(e.target.value) / 100 }))}
-            style={{
-              width: '300px',
-              cursor: 'pointer'
-            }}
-          />
-          <Typography variant="caption">Flexible</Typography>
-        </Box>
-        <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-          0% = Solo coincidencias exactas | 100% = Acepta variaciones (acentos, abreviaciones)
-        </Typography>
-      </Box>
-    </Box>
-
-    {/* Genetic Algorithm Parameters */}
-    <Box sx={{ mt: 4 }}>
-      <Typography variant="h6" fontWeight={600} sx={{ mb: 2 }}>
-        Parámetros del Algoritmo Genético
-      </Typography>
-
-      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 3, maxWidth: 800 }}>
-        <Box>
-          <Typography variant="body1" sx={{ mb: 1 }}>
-            Semilla (Seed): {seed}
-          </Typography>
-          <input
-            type="number"
-            value={seed}
-            onChange={(e) => dispatch(setParameters({ seed: Number(e.target.value) }))}
-            style={{
-              padding: '8px 12px',
-              border: '1px solid #ccc',
-              borderRadius: '4px',
-              fontSize: '16px',
-              width: '150px'
-            }}
-          />
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-            Para resultados reproducibles
-          </Typography>
-        </Box>
-
-        <Box>
-          <Typography variant="body1" sx={{ mb: 1 }}>
-            Iteraciones: {geneticIterations}
-          </Typography>
-          <input
-            type="range"
-            min="10"
-            max="500"
-            value={geneticIterations}
-            onChange={(e) => dispatch(setParameters({ geneticIterations: Number(e.target.value) }))}
-            style={{ width: '200px', cursor: 'pointer' }}
-          />
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-            Más iteraciones = mejor solución pero más lento
-          </Typography>
-        </Box>
-
-        <Box>
-          <Typography variant="body1" sx={{ mb: 1 }}>
-            Tamaño de Población: {populationSize}
-          </Typography>
-          <input
-            type="range"
-            min="10"
-            max="200"
-            value={populationSize}
-            onChange={(e) => dispatch(setParameters({ populationSize: Number(e.target.value) }))}
-            style={{ width: '200px', cursor: 'pointer' }}
-          />
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-            Más población = más diversidad
-          </Typography>
-        </Box>
-
-        <Box>
-          <Typography variant="body1" sx={{ mb: 1 }}>
-            Tasa de Mutación: {(mutationRate * 100).toFixed(0)}%
-          </Typography>
-          <input
-            type="range"
-            min="1"
-            max="30"
-            value={mutationRate * 100}
-            onChange={(e) => dispatch(setParameters({ mutationRate: Number(e.target.value) / 100 }))}
-            style={{ width: '200px', cursor: 'pointer' }}
-          />
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-            5-20% típico (previene convergencia prematura)
-          </Typography>
-        </Box>
-
-        <Box>
-          <Typography variant="body1" sx={{ mb: 1 }}>
-            Tasa de Cruce: {(crossoverRate * 100).toFixed(0)}%
-          </Typography>
-          <input
-            type="range"
-            min="50"
-            max="95"
-            value={crossoverRate * 100}
-            onChange={(e) => dispatch(setParameters({ crossoverRate: Number(e.target.value) / 100 }))}
-            style={{ width: '200px', cursor: 'pointer' }}
-          />
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-            60-90% típico (mezcla de soluciones)
-          </Typography>
-        </Box>
-
-        <Box>
-          <Typography variant="body1" sx={{ mb: 1 }}>
-            Tamaño del Torneo: {tournamentSize}
-          </Typography>
-          <input
-            type="range"
-            min="2"
-            max="10"
-            value={tournamentSize}
-            onChange={(e) => dispatch(setParameters({ tournamentSize: Number(e.target.value) }))}
-            style={{ width: '200px', cursor: 'pointer' }}
-          />
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-            2-3 exploración, 4-5 explotación
-          </Typography>
-        </Box>
-
-        <Box>
-          <Typography variant="body1" sx={{ mb: 1 }}>
-            Elitismo: {elitismCount} individuos
-          </Typography>
-          <input
-            type="range"
-            min="0"
-            max="10"
-            value={elitismCount}
-            onChange={(e) => dispatch(setParameters({ elitismCount: Number(e.target.value) }))}
-            style={{ width: '200px', cursor: 'pointer' }}
-          />
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
-            Mejores individuos que pasan sin cambios
-          </Typography>
-        </Box>
-
-        <Box>
-          <Typography variant="body1" sx={{ mb: 1 }}>
-            Complejidad Total: {(populationSize * geneticIterations).toLocaleString()}
-          </Typography>
-          <Typography variant="caption" color={populationSize * geneticIterations > 100000 ? 'warning.main' : 'text.secondary'} sx={{ display: 'block' }}>
-            {populationSize * geneticIterations < 10000 ? 'Rápido' :
-              populationSize * geneticIterations < 50000 ? 'Normal' :
-                populationSize * geneticIterations < 100000 ? 'Lento' : 'Muy lento'}
-          </Typography>
-        </Box>
-      </Box>
-    </Box>
-  </Box>;
-};
-
 const Maraton = () => {
+  const dispatch = useDispatch<AppDispatch>();
   const tabs = ['Tutores', 'Alumnos', 'Parámetros', 'Resultados'];
   const [maratonTab, setMaratonTab] = useState('Tutores');
 
-  const [alumnosFile, setAlumnosFile] = useState<File | null>(null);
-  const [tutoresFile, setTutoresFile] = useState<File | null>(null);
-  const [alumnosData, setAlumnosData] = useState<any[]>([]);
-  const [tutoresData, setTutoresData] = useState<any[]>([]);
-  const [alumnosColumns, setAlumnosColumns] = useState<GridColDef[]>([]);
-  const [tutoresColumns, setTutoresColumns] = useState<GridColDef[]>([]);
-
-  // Results state
-  const [assignmentResults, setAssignmentResults] = useState<any>(null);
-
-  const requiredAlumnosColumns = [
-    'Fecha', 'Nombre', 'Apellido', 'Email', 'Rubro', 'Emprendimiento',
-    'Descripción', 'Puntaje', 'Tutor1', 'Tutor2', 'Tutor3', 'Tutor4', 'Tutor5'
-  ];
-
-  const requiredTutoresColumns = [
-    'Nombre', 'Apellido'
-  ];
-
-  // Shared function to calculate match score for a student (counts ALL tutor preferences in maxScore)
-  const calculateMatchScore = (alumno: any, groupTutors: string[]) => {
-    let score = 0;
-    let maxScore = 0;
-
-    // Check each tutor preference - count ALL preferences in maxScore (even non-existent tutors)
-    for (let i = 1; i <= 5; i++) {
-      const tutorPref = alumno[`Tutor${i}`];
-      if (tutorPref && tutorPref.trim()) { // Count any non-empty preference
-        const weight = pesoRelativoTutores[i - 1] || 0;
-        maxScore += weight; // Count ALL tutor preferences regardless of validity
-
-        // Only give score points if tutor exists AND is in the group
-        let tutorExistsInDatabase = false;
-        if (tutoresData && tutoresData.length > 0) {
-          const validTutorNames = tutoresData.map(t => `${t.Nombre} ${t.Apellido}`);
-          for (const validTutor of validTutorNames) {
-            const similarity = calculateSimilarity(tutorPref, validTutor);
-            const threshold = 1.0 - similarityThreshold;
-            if (similarity >= threshold) {
-              tutorExistsInDatabase = true;
-              break;
-            }
-          }
-        }
-
-        // Only give credit if tutor exists in database AND is in the group
-        if (tutorExistsInDatabase) {
-          for (const groupTutor of groupTutors) {
-            const similarity = calculateSimilarity(tutorPref, groupTutor);
-            if (similarity >= (1.0 - similarityThreshold)) {
-              score += weight;
-              break;
-            }
-          }
-        }
-      }
-    }
-
-    return { score, maxScore };
-  };
-
-  // // Algorithm to create optimal groups
-  // const createOptimalGroups = () => {
-  //   if (alumnosData.length === 0 || tutoresData.length === 0) return;
-
-  //   console.log('Starting group optimization...');
-  //   //console.log(`Testing group counts from ${minCantidadGrupos} to ${maxCantidadGrupos}`);
-
-  //   // Create tutor full names for matching
-  //   const tutorFullNames = tutoresData.map(t => ({
-  //     original: `${t.Nombre} ${t.Apellido}`,
-  //     normalized: normalizeName(`${t.Nombre} ${t.Apellido}`),
-  //     firstName: t.Nombre,
-  //     lastName: t.Apellido
-  //   }));
-
-  //   // Calculate affinity score for each alumno-group combination
-  //   const calculateAffinity = (alumno: any, groupTutors: string[]) => {
-  //     let score = 0;
-
-  //     // Check each tutor preference with weights
-  //     for (let i = 1; i <= 5; i++) {
-  //       const tutorPref = alumno[`Tutor${i}`];
-  //       if (!tutorPref) continue;
-
-  //       const weight = pesoRelativoTutores[i - 1] || 0;
-
-  //       // First check if this tutor preference is valid (exists in database)
-  //       let tutorExistsInDatabase = false;
-  //       const validTutorNames = tutorFullNames.map(t => t.original);
-  //       for (const validTutor of validTutorNames) {
-  //         const similarity = calculateSimilarity(tutorPref, validTutor);
-  //         const threshold = 1.0 - similarityThreshold;
-  //         if (similarity >= threshold) {
-  //           tutorExistsInDatabase = true;
-  //           break;
-  //         }
-  //       }
-
-  //       // Only give credit if tutor exists in database AND is in the group
-  //       if (tutorExistsInDatabase) {
-  //         // Check if this valid tutor is in the group
-  //         let maxSimilarity = 0;
-
-  //         for (const groupTutor of groupTutors) {
-  //           const similarity = calculateSimilarity(tutorPref, groupTutor);
-
-  //           // Special handling for abbreviations
-  //           const prefParts = normalizeName(tutorPref).split(' ');
-  //           const gtParts = normalizeName(groupTutor).split(' ');
-
-  //           // Check if it's an abbreviation match (e.g., "r. hernandez" matches "roberto hernandez")
-  //           if (prefParts.length >= 2 && gtParts.length >= 2) {
-  //             const lastNameMatch = prefParts[prefParts.length - 1] === gtParts[gtParts.length - 1];
-  //             const firstInitialMatch = prefParts[0].charAt(0) === gtParts[0].charAt(0);
-  //             if (lastNameMatch && prefParts[0].length <= 2 && firstInitialMatch) {
-  //               // Boost similarity for abbreviation matches
-  //               maxSimilarity = Math.max(maxSimilarity, 0.95);
-  //               continue;
-  //             }
-  //           }
-
-  //           if (similarity > maxSimilarity) {
-  //             maxSimilarity = similarity;
-  //           }
-  //         }
-
-  //         // Give credit when tutor is in the group
-  //         const threshold = 1.0 - similarityThreshold;
-  //         if (maxSimilarity >= threshold) {
-  //           score += weight;
-  //         }
-  //       }
-  //     }
-
-  //     return score;
-  //   };
-
-  //   // Function to validate tutors and collect warnings
-  //   const validateTutorPreferences = () => {
-  //     const warnings: string[] = [];
-  //     const validTutorNames = tutorFullNames.map(t => t.original);
-
-  //     alumnosData.forEach((alumno) => {
-  //       for (let i = 1; i <= 5; i++) {
-  //         const tutorPref = alumno[`Tutor${i}`];
-  //         if (!tutorPref) continue;
-
-  //         // Check if this tutor preference matches any available tutor
-  //         let bestSimilarity = 0;
-  //         let bestMatch = null;
-
-  //         for (const validTutor of validTutorNames) {
-  //           const similarity = calculateSimilarity(tutorPref, validTutor);
-  //           if (similarity > bestSimilarity) {
-  //             bestSimilarity = similarity;
-  //             bestMatch = validTutor;
-  //           }
-  //         }
-
-  //         // Show warnings for similarities below threshold
-  //         const threshold = 1.0 - similarityThreshold;
-  //         if (bestSimilarity < threshold) {
-  //           if (bestSimilarity > 0.5) {
-  //             // Close match but below threshold - might be a typo
-  //             warnings.push(
-  //               `"${alumno.Nombre} ${alumno.Apellido}" seleccionó "${tutorPref}" (Tutor${i}) - ¿querías decir "${bestMatch}"? (${(bestSimilarity * 100).toFixed(0)}% coincidencia)`
-  //             );
-  //           } else {
-  //             // Very low similarity - likely non-existent tutor
-  //             warnings.push(
-  //               `"${alumno.Nombre} ${alumno.Apellido}" seleccionó "${tutorPref}" (Tutor${i}) que no coincide con ningún tutor disponible`
-  //             );
-  //           }
-  //         }
-  //         // Note: abbreviations with 95% similarity won't show warnings with 80% threshold
-  //       }
-  //     });
-
-  //     return warnings;
-  //   };
-
-  //   // Calculate perfect score (if all students got all their preferred tutors)
-  //   const calculatePerfectScore = () => {
-  //     let perfectScore = 0;
-  //     alumnosData.forEach((alumno) => {
-  //       for (let i = 1; i <= 5; i++) {
-  //         const tutorPref = alumno[`Tutor${i}`];
-  //         if (tutorPref) {
-  //           const weight = pesoRelativoTutores[i - 1] || 0;
-  //           perfectScore += weight; // Assume perfect match (score = weight)
-  //         }
-  //       }
-  //     });
-  //     return perfectScore;
-  //   };
-
-  //   // Function to create and evaluate groups for a specific count
-  //   const evaluateGroupConfiguration = (cantidadGrupos: number) => {
-  //     const newGroups: any[] = [];
-
-  //     // Initialize empty groups
-  //     for (let i = 0; i < cantidadGrupos; i++) {
-  //       newGroups.push({
-  //         id: i + 1,
-  //         name: `Grupo ${i + 1}`,
-  //         tutores: [],
-  //         alumnos: [],
-  //         maxCapacity: maximosAlumnosPorGrupo
-  //       });
-  //     }
-
-  //     // Distribute tutors ensuring each group gets at least one
-  //     tutorFullNames.forEach((tutor, index) => {
-  //       const groupIndex = index % cantidadGrupos; // Round-robin distribution
-  //       newGroups[groupIndex].tutores.push(tutor.original);
-  //     });
-
-  //     // Create assignment tracking
-  //     const assignments: any[] = [];
-  //     const assignedAlumnos = new Set();
-
-  //     // Sort alumnos by score (higher scores first)
-  //     const alumnosWithScores = alumnosData.map(alumno => {
-  //       const scores = newGroups.map(group => ({
-  //         groupId: group.id,
-  //         score: calculateAffinity(alumno, group.tutores)
-  //       }));
-  //       scores.sort((a, b) => b.score - a.score);
-
-  //       return {
-  //         alumno,
-  //         preferredGroups: scores
-  //       };
-  //     });
-
-  //     // Sort by puntaje (descending), then by fecha (ascending), then by preference score
-  //     alumnosWithScores.sort((a, b) => {
-  //       // First priority: Higher puntaje (better students first)
-  //       const puntajeA = parseFloat(a.alumno.Puntaje) || 0;
-  //       const puntajeB = parseFloat(b.alumno.Puntaje) || 0;
-  //       if (puntajeA !== puntajeB) {
-  //         return puntajeB - puntajeA; // Higher scores first
-  //       }
-
-  //       // Second priority: Earlier fecha (older applications first)
-  //       const fechaA = new Date(a.alumno.Fecha || '9999-12-31');
-  //       const fechaB = new Date(b.alumno.Fecha || '9999-12-31');
-  //       if (fechaA.getTime() !== fechaB.getTime()) {
-  //         return fechaA.getTime() - fechaB.getTime(); // Earlier dates first
-  //       }
-
-  //       // Third priority: Higher tutor preference score
-  //       return b.preferredGroups[0].score - a.preferredGroups[0].score;
-  //     });
-
-  //     // Log the assignment order for debugging
-  //     console.log('Assignment order for', cantidadGrupos, 'groups:');
-  //     alumnosWithScores.slice(0, 5).forEach((item, index) => {
-  //       const { alumno } = item;
-  //       console.log(`${index + 1}. ${alumno.Nombre} ${alumno.Apellido} - Puntaje: ${alumno.Puntaje}, Fecha: ${alumno.Fecha}`);
-  //     });
-  //     if (alumnosWithScores.length > 5) {
-  //       console.log(`... and ${alumnosWithScores.length - 5} more students`);
-  //     }
-
-  //     // Assign alumnos to groups
-  //     let totalScore = 0;
-  //     for (const { alumno, preferredGroups } of alumnosWithScores) {
-  //       // Try to assign to preferred groups in order
-  //       for (const { groupId, score } of preferredGroups) {
-  //         const group = newGroups.find(g => g.id === groupId);
-  //         if (group && group.alumnos.length < group.maxCapacity) {
-  //           group.alumnos.push(alumno);
-  //           assignedAlumnos.add(alumno.id);
-  //           // Use calculateMatchScore to ensure consistent calculation with Satisfacción Promedio
-  //           const { score: matchScore } = calculateMatchScore(alumno, group.tutores);
-  //           totalScore += matchScore;
-
-  //           assignments.push({
-  //             alumnoName: `${alumno.Nombre} ${alumno.Apellido}`,
-  //             groupId,
-  //             groupName: group.name,
-  //             affinityScore: score,
-  //             matchedTutors: []
-  //           });
-
-  //           break;
-  //         }
-  //       }
-  //     }
-
-  //     const totalAssigned = assignedAlumnos.size;
-  //     const totalAlumnos = alumnosData.length;
-
-  //     return {
-  //       cantidadGrupos,
-  //       groups: newGroups,
-  //       assignments,
-  //       totalScore,
-  //       statistics: {
-  //         totalAlumnos,
-  //         totalAssigned,
-  //         unassigned: totalAlumnos - totalAssigned,
-  //         avgGroupSize: (totalAssigned / cantidadGrupos).toFixed(1),
-  //         groupsUsed: newGroups.filter(g => g.alumnos.length > 0).length
-  //       }
-  //     };
-  //   };
-
-  //   // Validate tutor preferences and collect warnings
-  //   const tutorWarnings = validateTutorPreferences();
-  //   if (tutorWarnings.length > 0) {
-  //     console.warn('Tutor validation warnings:', tutorWarnings);
-  //   }
-
-  //   // Calculate the theoretical perfect score
-  //   const perfectScore = calculatePerfectScore();
-  //   console.log(`Perfect score (theoretical maximum): ${perfectScore.toFixed(1)}`);
-
-  //   // Try all group counts and find the best one
-  //   let bestConfiguration = null;
-  //   let bestScore = -1;
-
-  //   // Limit max groups to number of tutors AND number of alumnos (each group needs at least one tutor and one alumno)
-  //   const maxPossibleGroups = Math.min(maxCantidadGrupos, tutoresData.length, alumnosData.length);
-  //   const effectiveMinGroups = Math.min(minCantidadGrupos, maxPossibleGroups);
-
-  //   console.log(`Limited to ${maxPossibleGroups} groups (max tutors: ${tutoresData.length}, max alumnos: ${alumnosData.length})`);
-
-  //   for (let groupCount = effectiveMinGroups; groupCount <= maxPossibleGroups; groupCount++) {
-  //     const configuration = evaluateGroupConfiguration(groupCount);
-
-  //     // Prefer configurations that assign more students and have higher total scores
-  //     const configScore = configuration.totalScore * 1000 + configuration.statistics.totalAssigned;
-
-  //     console.log(`Groups: ${groupCount}, Score: ${configuration.totalScore.toFixed(2)}, Assigned: ${configuration.statistics.totalAssigned}/${configuration.statistics.totalAlumnos}`);
-
-  //     if (configScore > bestScore) {
-  //       bestScore = configScore;
-  //       bestConfiguration = configuration;
-  //     }
-  //   }
-
-  //   if (bestConfiguration) {
-  //     setAssignmentResults({
-  //       ...bestConfiguration,
-  //       timestamp: new Date().toISOString(),
-  //       selectedGroupCount: bestConfiguration.cantidadGrupos,
-  //       tutorWarnings: tutorWarnings,
-  //       perfectScore: perfectScore
-  //     });
-
-  //     console.log(`Optimal configuration: ${bestConfiguration.cantidadGrupos} groups with total score: ${bestConfiguration.totalScore.toFixed(2)}`);
-
-  //     // Switch to results tab
-  //     setMaratonTab('Resultados');
-  //   }
-  // };
-
-  const parseCSV = (text: string, type: 'alumnos' | 'tutores'): { data: any[], columns: GridColDef[], error?: string } => {
-    const lines = text.trim().split('\n');
-    if (lines.length === 0) return { data: [], columns: [], error: 'Archivo CSV vacío' };
-
-    const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
-
-    // Validate required columns
-    const requiredColumns = type === 'alumnos' ? requiredAlumnosColumns : requiredTutoresColumns;
-    const missingColumns = requiredColumns.filter(col => !headers.includes(col));
-    if (missingColumns.length > 0) {
-      return {
-        data: [],
-        columns: [],
-        error: `Faltan las siguientes columnas requeridas: ${missingColumns.join(', ')}`
-      };
-    }
-
-    // Use required columns for both types
-    const columnsToUse = requiredColumns;
-    const columns: GridColDef[] = columnsToUse.map(header => ({
-      field: header,
-      headerName: header,
-      width: header === 'Descripción' ? 250 :
-        header === 'Email' ? 200 :
-          header === 'Nombre' || header === 'Apellido' ? 120 :
-            header === 'Puntaje' ? 80 : 150,
-      sortable: true,
-    }));
-
-    const data: any[] = [];
-    const validationErrors: string[] = [];
-
-    for (let i = 1; i < lines.length; i++) {
-      const values = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
-      const row: any = { id: i - 1 };
-
-      columnsToUse.forEach((header) => {
-        const headerIndex = headers.indexOf(header);
-        const value = headerIndex !== -1 ? (values[headerIndex] || '') : '';
-
-        // Validate Puntaje for alumnos
-        if (type === 'alumnos' && header === 'Puntaje' && value !== '') {
-          const numericValue = parseFloat(value);
-          if (isNaN(numericValue) || numericValue < 0 || numericValue > 10) {
-            validationErrors.push(`Fila ${i + 1}: El puntaje "${value}" debe ser un número entre 0 y 10`);
-          }
-        }
-
-        // Validate required fields for tutores
-        if (type === 'tutores' && (header === 'Nombre' || header === 'Apellido') && value.trim() === '') {
-          validationErrors.push(`Fila ${i + 1}: El campo "${header}" es requerido y no puede estar vacío`);
-        }
-
-        row[header] = value;
-      });
-      data.push(row);
-    }
-
-    // Return validation errors if any
-    if (validationErrors.length > 0) {
-      return {
-        data: [],
-        columns: [],
-        error: `Errores de validación:\n${validationErrors.slice(0, 5).join('\n')}${validationErrors.length > 5 ? `\n... y ${validationErrors.length - 5} errores más` : ''}`
-      };
-    }
-
-    return { data, columns };
-  };
-
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>, type: 'alumnos' | 'tutores') => {
+    const parseCSV = (text: string, type: 'alumnos' | 'tutores'): { data: any[], columns: GridColDef[], error?: string } => {
+      const requiredAlumnosColumns = [
+        'Fecha', 'Nombre', 'Apellido', 'Email', 'Rubro', 'Emprendimiento',
+        'Descripción', 'Puntaje', 'Tutor1', 'Tutor2', 'Tutor3', 'Tutor4', 'Tutor5'
+      ];
+
+      const requiredTutoresColumns = [
+        'Nombre', 'Apellido'
+      ];
+
+      const lines = text.trim().split('\n');
+      if (lines.length === 0) return { data: [], columns: [], error: 'Archivo CSV vacío' };
+
+      const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+
+      // Validate required columns
+      const requiredColumns = type === 'alumnos' ? requiredAlumnosColumns : requiredTutoresColumns;
+      const missingColumns = requiredColumns.filter(col => !headers.includes(col));
+      if (missingColumns.length > 0) {
+        return {
+          data: [],
+          columns: [],
+          error: `Faltan las siguientes columnas requeridas: ${missingColumns.join(', ')}`
+        };
+      }
+
+      // Use required columns for both types
+      const columnsToUse = requiredColumns;
+      const columns: GridColDef[] = columnsToUse.map(header => ({
+        field: header,
+        headerName: header,
+        width: header === 'Descripción' ? 250 :
+          header === 'Email' ? 200 :
+            header === 'Nombre' || header === 'Apellido' ? 120 :
+              header === 'Puntaje' ? 80 : 150,
+        sortable: true,
+      }));
+
+      const data: any[] = [];
+      const validationErrors: string[] = [];
+
+      for (let i = 1; i < lines.length; i++) {
+        const values = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+        const row: any = { id: i - 1 };
+
+        columnsToUse.forEach((header) => {
+          const headerIndex = headers.indexOf(header);
+          const value = headerIndex !== -1 ? (values[headerIndex] || '') : '';
+
+          // Validate Puntaje for alumnos
+          if (type === 'alumnos' && header === 'Puntaje' && value !== '') {
+            const numericValue = parseFloat(value);
+            if (isNaN(numericValue) || numericValue < 0 || numericValue > 10) {
+              validationErrors.push(`Fila ${i + 1}: El puntaje "${value}" debe ser un número entre 0 y 10`);
+            }
+          }
+
+          // Validate required fields for tutores
+          if (type === 'tutores' && (header === 'Nombre' || header === 'Apellido') && value.trim() === '') {
+            validationErrors.push(`Fila ${i + 1}: El campo "${header}" es requerido y no puede estar vacío`);
+          }
+
+          row[header] = value;
+        });
+        data.push(row);
+      }
+
+      // Return validation errors if any
+      if (validationErrors.length > 0) {
+        return {
+          data: [],
+          columns: [],
+          error: `Errores de validación:\n${validationErrors.slice(0, 5).join('\n')}${validationErrors.length > 5 ? `\n... y ${validationErrors.length - 5} errores más` : ''}`
+        };
+      }
+
+      return { data, columns };
+    };
+
     const file = event.target.files?.[0];
     if (file) {
       // Check file extension and MIME type
       const isCSV = file.name.toLowerCase().endsWith('.csv') || file.type === 'text/csv' || file.type === 'application/vnd.ms-excel';
-
       if (!isCSV) {
         alert('Error: Solo se permiten archivos CSV');
         event.target.value = ''; // Reset input
@@ -822,22 +138,13 @@ const Maraton = () => {
       const reader = new FileReader();
       reader.onload = (e) => {
         const text = e.target?.result as string;
-        const { data, columns, error } = parseCSV(text, type);
+        let { data, columns, error } = parseCSV(text, type);
 
         if (error) {
           alert(`Error en el archivo CSV: ${error}`);
           event.target.value = ''; // Reset input
-          return;
-        }
-
-        if (type === 'alumnos') {
-          setAlumnosFile(file);
-          setAlumnosData(data);
-          setAlumnosColumns(columns);
         } else {
-          setTutoresFile(file);
-          setTutoresData(data);
-          setTutoresColumns(columns);
+          dispatch(setFile({ type, fileName: file.name, data, columns }))
         }
       };
       reader.readAsText(file);
@@ -858,33 +165,24 @@ const Maraton = () => {
   };
 
   const Tutores = () => {
+    const tutoresFileName = useSelector((state: RootState) => state.app.tutoresFileName);
+    const tutoresData = useSelector((state: RootState) => state.app.tutoresData);
+    const tutoresColumns = useSelector((state: RootState) => state.app.tutoresColumns);
+
     return <Box sx={{ p: 3, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h5" fontWeight={600}>Gestión de Tutores ({tutoresData.length} registros)</Typography>
-        {tutoresFile && (
+        {tutoresFileName && (
           <Box sx={{ color: 'info.main', borderRadius: 1 }}>
-            <Typography variant="body1">{tutoresFile.name}</Typography>
+            <Typography variant="body1">{tutoresFileName}</Typography>
           </Box>
         )}
         <Box sx={{ display: 'flex', gap: 2 }}>
-          <Button
-            component="label"
-            variant="contained"
-            startIcon={<UploadFileIcon />}
-          >
+          <Button component="label" variant="contained" startIcon={<UploadFileIcon />}  >
             Subir CSV
-            <input
-              type="file"
-              accept=".csv"
-              onChange={(e) => handleFileUpload(e, 'tutores')}
-              hidden
-            />
+            <input type="file" accept=".csv" onChange={(e) => handleFileUpload(e, 'tutores')} hidden />
           </Button>
-          <Button
-            variant="outlined"
-            startIcon={<DownloadIcon />}
-            onClick={() => downloadExampleCSV('tutores')}
-          >
+          <Button variant="outlined" startIcon={<DownloadIcon />} onClick={() => downloadExampleCSV('tutores')} >
             Descargar Plantilla
           </Button>
         </Box>
@@ -896,44 +194,32 @@ const Maraton = () => {
             density="compact"
             rows={tutoresData}
             columns={tutoresColumns}
-            initialState={{
-              pagination: {
-                paginationModel: { pageSize: 100 },
-              },
-            }}
+            initialState={{ pagination: { paginationModel: { pageSize: 100 } } }}
           />
         </Box>
       )}
     </Box>
   };
+
   const Alumnos = () => {
+    const alumnosFileName = useSelector((state: RootState) => state.app.alumnosFileName);
+    const alumnosData = useSelector((state: RootState) => state.app.alumnosData);
+    const alumnosColumns = useSelector((state: RootState) => state.app.alumnosColumns);
+
     return <Box sx={{ p: 3, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
         <Typography variant="h5" fontWeight={600}>Gestión de Alumnos ({alumnosData.length} registros)</Typography>
-        {alumnosFile && (
+        {alumnosFileName && (
           <Box sx={{ color: 'info.main', borderRadius: 1 }}>
-            <Typography variant="body1">{alumnosFile.name}</Typography>
+            <Typography variant="body1">{alumnosFileName}</Typography>
           </Box>
         )}
         <Box sx={{ display: 'flex', gap: 2 }}>
-          <Button
-            component="label"
-            variant="contained"
-            startIcon={<UploadFileIcon />}
-          >
+          <Button component="label" variant="contained" startIcon={<UploadFileIcon />}  >
             Subir CSV
-            <input
-              type="file"
-              accept=".csv"
-              onChange={(e) => handleFileUpload(e, 'alumnos')}
-              hidden
-            />
+            <input type="file" accept=".csv" onChange={(e) => handleFileUpload(e, 'alumnos')} hidden />
           </Button>
-          <Button
-            variant="outlined"
-            startIcon={<DownloadIcon />}
-            onClick={() => downloadExampleCSV('alumnos')}
-          >
+          <Button variant="outlined" startIcon={<DownloadIcon />} onClick={() => downloadExampleCSV('tutores')} >
             Descargar Plantilla
           </Button>
         </Box>
@@ -945,16 +231,189 @@ const Maraton = () => {
             density="compact"
             rows={alumnosData}
             columns={alumnosColumns}
-            initialState={{
-              pagination: {
-                paginationModel: { pageSize: 100 },
-              },
-            }}
+            initialState={{ pagination: { paginationModel: { pageSize: 100 } } }}
           />
         </Box>
       )}
+    </Box>
+  };
+
+  const Parametros = () => {
+    const dispatch = useDispatch<AppDispatch>();
+
+    const ParametrosMaraton = () => {
+
+      const RecalculateButton = () => {
+
+        const onRecalculate = () => {
+          console.log('Handle Recalculate triggered');
+          dispatch(optimizeGroups());
+        };
+
+        const running = useSelector((state: RootState) => state.app.running);
+        const alumnosData = useSelector((state: RootState) => state.app.alumnosData);
+        const tutoresData = useSelector((state: RootState) => state.app.tutoresData);
+
+        return <Button variant="contained" onClick={onRecalculate} disabled={running || !alumnosData || !tutoresData} sx={{ bgcolor: 'primary.main' }} >
+          Recalcular Grupos
+        </Button>
+      };
+
+      const NumericMinMaxInput = <K extends keyof RootState["app"]["parameters"]>(props: { minKey: K, maxKey: K, min: number, max: number }) => {
+
+        const MinInput = () => {
+          const minValue = useSelector((state: RootState) => state.app.parameters[props.minKey]) as number;
+          return <TextField
+            type="number"
+            value={minValue}
+            onChange={(e) => dispatch(setParameters({ [props.minKey]: Number(e.target.value) }))}
+            label="Mínimo"
+            variant="outlined"
+          />
+        }
+
+        const MaxInput = () => {
+          const maxValue = useSelector((state: RootState) => state.app.parameters[props.maxKey]) as number;
+          return <TextField
+            type="number"
+            value={maxValue}
+            onChange={(e) => dispatch(setParameters({ [props.maxKey]: Number(e.target.value) }))}
+            label="Máximo"
+            variant="outlined"
+          />
+        }
+
+        return <Box sx={{ display: 'flex', gap: 3 }}>
+          <MinInput />
+          <MaxInput />
+        </Box>
+      };
+
+      const PesoRelativoTutores = () => {
+        const pesoRelativoTutores = useSelector((state: RootState) => state.app.parameters.pesoRelativoTutores);
+        const handlePesoChange = (index: number, value: string) => {
+          const newPesos = [...pesoRelativoTutores];
+          newPesos[index] = Number(value);
+          dispatch(setParameters({ pesoRelativoTutores: newPesos }));
+        };
+        return <Box sx={{ display: 'flex', gap: 1 }}>
+          {pesoRelativoTutores.map((peso: number, index: number) => (
+            <Box key={index}>
+              <Typography variant="caption" sx={{ display: 'block', mb: 0.5 }}>
+                Tutor {index + 1}
+              </Typography>
+              <input
+                type="number"
+                value={peso}
+                onChange={(e) => handlePesoChange(index, e.target.value)}
+                style={{
+                  padding: '8px 12px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                  fontSize: '16px',
+                  width: '60px'
+                }}
+              />
+            </Box>
+          ))}
+        </Box>
+      };
+
+      const SensibilidadCoincidencia = () => {
+        const similarityThreshold = useSelector((state: RootState) => state.app.parameters.similarityThreshold);
+        return <Box sx={{ alignItems: 'center', gap: 2, paddingTop: "0rem" }}>
+          <Typography variant="body1" sx={{ mb: 1 }}>
+            Sensibilidad de coincidencia de nombres: {(similarityThreshold * 100).toFixed(0)}%
+          </Typography>
+          <Typography variant="caption">Estricto</Typography>
+          <input
+            type="range"
+            min="0"
+            max="100"
+            value={similarityThreshold * 100}
+            onChange={(e) => dispatch(setParameters({ similarityThreshold: Number(e.target.value) / 100 }))}
+            style={{
+              width: '300px',
+              cursor: 'pointer'
+            }}
+          />
+          <Typography variant="caption">Flexible</Typography>
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+            0% = Solo coincidencias exactas | 100% = Acepta variaciones (acentos, abreviaciones)
+          </Typography>
+        </Box>
+      }
+
+      return <>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+          <Typography variant="h5" fontWeight={600} children={"Parámetros de la Maratón"} />
+          <RecalculateButton />
+        </Box>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, maxWidth: 400 }}>
+          <Box>
+            <Typography variant="body1" sx={{ mb: 1 }} children={"Cantidad de Grupos"} />
+            <NumericMinMaxInput minKey="minCantidadGrupos" maxKey="maxCantidadGrupos" min={1} max={100} />
+          </Box>
+          <Box>
+            <Typography variant="body1" sx={{ mb: 1 }} children={"Alumnos por Grupo"} />
+            <NumericMinMaxInput minKey="minAlumnosPorGrupo" maxKey="maxAlumnosPorGrupo" min={1} max={100} />
+          </Box>
+          <Box>
+            <Typography variant="body1" sx={{ mb: 1 }} children={"Tutores por Grupo"} />
+            <NumericMinMaxInput minKey="minTutoresPorGrupo" maxKey="maxTutoresPorGrupo" min={1} max={100} />
+          </Box>
+          <Box>
+            <Typography variant="body1" sx={{ mb: 1 }} children={"Peso Relativo Tutores"} />
+            <PesoRelativoTutores />
+          </Box>
+          < SensibilidadCoincidencia />
+        </Box>
+      </>
+    };
+
+    const ParametrosGeneticos = () => {
+
+      const NumericInput = <K extends keyof RootState["app"]["parameters"]>(props: { k: K, label: string, min: number, max: number, comment: string }) => {
+
+        const value = useSelector((state: RootState) => state.app.parameters[props.k]) as number;
+        return <Box sx={{ gap: 3 }}>
+          <TextField
+            type="number"
+            value={value}
+            onChange={(e) => dispatch(setParameters({ [props.k]: Number(e.target.value) }))}
+            label={props.label}
+            variant="outlined"
+          />
+          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+            {props.comment}
+          </Typography>
+        </Box>
+
+      };
+
+      return <>
+        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, paddingTop: "2rem" }}>
+          <Typography variant="h5" fontWeight={600} children={"Parámetros Genéticos"} />
+        </Box>
+        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3, maxWidth: 400 }}>
+          <NumericInput k={"seed"} label="Semilla" min={1} max={999999999999999} comment={"Para resultados reproducibles"} />
+          <NumericInput k={"geneticIterations"} label="Iteracions" min={1} max={1000} comment={"Más iteraciones = mejor solución pero más lento"} />
+          <NumericInput k={"populationSize"} label="Tamaño Población" min={10} max={1000} comment={"Más población = más diversidad"} />
+          <NumericInput k={"mutationRate"} label="Ratio Mutación" min={0} max={1} comment={"5-20% típico (previene convergencia prematura)"} />
+          <NumericInput k={"crossoverRate"} label="Ratio Crossover" min={0} max={1} comment={"60-90% típico (mezcla de soluciones)"} />
+          <NumericInput k={"tournamentSize"} label="Tamaño Torneo" min={1} max={50} comment={"2-3 exploración, 4-5 explotación"} />
+          <NumericInput k={"elitismCount"} label="Elitismo" min={1} max={10} comment={"Mejores individuos que pasan sin cambios"} />
+        </Box>
+
+      </>
+    };
+
+    return <Box sx={{ p: 3, overflowY: 'auto', height: '100%' }}>
+      <ParametrosMaraton />
+      <ParametrosGeneticos />
     </Box>;
   };
+
   const Resultados = () => {
     // Uses the shared calculateMatchScore function
 
@@ -1659,13 +1118,7 @@ const Maraton = () => {
     <Box sx={{ flex: 1, overflow: 'hidden' }}>
       <CustomTabPanel value={maratonTab} index={"Tutores"} children={<Tutores />} />
       <CustomTabPanel value={maratonTab} index={"Alumnos"} children={<Alumnos />} />
-      <CustomTabPanel value={maratonTab} index={"Parámetros"} children={
-        <Parametros
-          canRecalculate={alumnosData.length > 0 && tutoresData.length > 0}
-          tutoresData={tutoresData}
-          alumnosData={alumnosData}
-        />
-      } />
+      <CustomTabPanel value={maratonTab} index={"Parámetros"} children={<Parametros />} />
       <CustomTabPanel value={maratonTab} index={"Resultados"} children={<Resultados />} />
     </Box>
   </>;

@@ -136,11 +136,11 @@ const initialState: AppState = {
 
   parameters: {
     seed: 42,
-    geneticIterations: 500,
+    geneticIterations: 250,
     populationSize: 100,
-    mutationRate: 0.1,
-    crossoverRate: 0.5,
-    tournamentSize: 5,
+    mutationRate: 0.35,
+    crossoverRate: 0.75,
+    tournamentSize: 3,
     elitismCount: 2,
 
     minCantidadGrupos: 10,

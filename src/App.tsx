@@ -4,7 +4,7 @@ import './App.css'
 
 import * as React from 'react';
 import { Box, Button, Divider, Drawer, TextField, IconButton, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Tab, Tabs, Typography, Modal, LinearProgress } from '@mui/material';
-import { ChevronLeft as ChevronLeftIcon, Download as DownloadIcon, Groups as GroupsIcon, Menu as MenuIcon, School as SchoolIcon, UploadFile as UploadFileIcon } from '@mui/icons-material';
+import { ChevronLeft as ChevronLeftIcon, Download as DownloadIcon, Groups as GroupsIcon, School as SchoolIcon, UploadFile as UploadFileIcon } from '@mui/icons-material';
 import { DataGrid, type GridColDef } from '@mui/x-data-grid';
 import { RootState, AppDispatch } from './store/store';
 import { setParameters, setFile, optimizeGroups } from './store/appSlice';
@@ -122,7 +122,7 @@ const OptimizationProgressModal = () => {
   const perfectFitness = useSelector((state: RootState) => state.app.perfectFitness);
   const maxTeoricalFitness = useSelector((state: RootState) => state.app.maxTeoricalFitness);
   const combinations = useSelector((state: RootState) => state.app.combinations);
-  
+
   return (
     <Modal open={running} disableEscapeKeyDown sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', }} >
       <Box sx={{ bgcolor: 'background.paper', borderRadius: 2, boxShadow: 24, p: 4, minWidth: 400, maxWidth: 600 }}>
@@ -156,7 +156,7 @@ const OptimizationProgressModal = () => {
             </Box>
             <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'grey.50', borderRadius: 1 }}>
               <Typography variant="h4" color="info.main" fontWeight={600}>
-                {combinations || 0}
+                {combinations || 0}
               </Typography>
               <Typography variant="caption" color="text.secondary">
                 Total Combinaciones
@@ -828,9 +828,17 @@ const Maraton = () => {
               </Typography>
             </Box>
             <Box>
-              <Typography variant="caption" color="text.secondary">Fitness Final</Typography>
+              <Typography variant="caption" color="text.secondary">Satisfacción Total</Typography>
               <Typography variant="h6" color="primary.main">
-                {champion.fitness ? champion.fitness.toFixed(2) : '0.00'}
+                {(() => {
+                  if (!champion.fitness) return '0.0%';
+                  // Calculate percentage based on perfect fitness from result
+                  const perfectFitness = result.history.generations?.[0]?.individuals?.length > 0
+                    ? Math.max(...Object.values(result.history.individuals).map(ind => ind.fitness)) * 1.2 // Estimate perfect as 120% of max observed
+                    : champion.fitness * 1.2;
+                  const percentage = (champion.fitness / perfectFitness) * 100;
+                  return `${Math.min(percentage, 100).toFixed(1)}%`;
+                })()}
               </Typography>
             </Box>
             <Box>
@@ -936,364 +944,175 @@ const Maraton = () => {
             >
               <Typography variant="h6">
                 👥 Grupos Formados ({displayGrupos.length})
-            </Typography>
-            <Typography
-              id="groups-arrow"
-              variant="h6"
-              sx={{
-                transition: 'transform 0.2s',
-                userSelect: 'none'
-              }}
-            >
-              ▼
-            </Typography>
-          </Box>
-          <Box
-            id="groups-content"
-            sx={{
-              p: 2,
-              pt: 0,
-              display: 'block'
-            }}
-          >
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-              {displayGrupos.map((group: any) => (
-                <Box key={group.id} sx={{
-                  p: 2,
-                  border: '1px solid',
-                  borderColor: 'divider',
-                  borderRadius: 1,
-                  bgcolor: 'background.paper'
-                }}>
-                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
-                    <Typography variant="subtitle1" fontWeight={600}>
-                      {group.name}
-                    </Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      {group.alumnos.length} / {group.maxCapacity} alumnos
-                    </Typography>
-                  </Box>
-
-                  <Box sx={{ mb: 1 }}>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                      Tutores:
-                    </Typography>
-                    <Typography variant="body2">
-                      {group.tutores.join(', ')}
-                    </Typography>
-                  </Box>
-
-                  {group.alumnos.length > 0 && (
-                    <Box>
-                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
-                        Alumnos:
-                      </Typography>
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
-                        {group.alumnos.map((alumno: any, index: number) => {
-                          // Find the original CSV data for this alumno
-                          const originalAlumno = alumnosData.find((a: any) =>
-                            a.Nombre === alumno.nombre && a.Apellido === alumno.apellido && a.Email === alumno.email
-                          ) as any;
-                          const { score, maxScore } = calculateMatchScore(originalAlumno || alumno, group.tutores);
-                          const percentage = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
-
-                          return (
-                            <Box key={index} sx={{
-                              px: 1,
-                              py: 0.5,
-                              bgcolor: 'grey.100',
-                              borderRadius: 0.5,
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 1
-                            }}>
-                              <Typography variant="body2">
-                                {alumno.nombre} {alumno.apellido}
-                              </Typography>
-                              <Typography variant="caption" sx={{
-                                color: percentage >= 75 ? 'success.main' :
-                                  percentage >= 50 ? '#FFC107' :
-                                    percentage >= 25 ? 'warning.dark' :
-                                      'error.main',
-                                fontWeight: 600
-                              }}>
-                                ({score}/{maxScore})
-                              </Typography>
-                            </Box>
-                          );
-                        })}
-                      </Box>
-                    </Box>
-                  )}
-                </Box>
-              ))}
+              </Typography>
+              <Typography
+                id="groups-arrow"
+                variant="h6"
+                sx={{
+                  transition: 'transform 0.2s',
+                  userSelect: 'none'
+                }}
+              >
+                ▼
+              </Typography>
             </Box>
-          </Box>
-        </Box>
-
-        {/* Student Satisfaction Ranking */}
-        <Box sx={{
-          border: '1px solid',
-          borderColor: 'divider',
-          borderRadius: 1,
-          mb: 2
-        }}>
-          <Box
-            sx={{
-              p: 2,
-              bgcolor: 'grey.50',
-              borderRadius: '4px 4px 0 0',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              '&:hover': { bgcolor: 'grey.100' }
-            }}
-            onClick={() => {
-              const element = document.getElementById('ranking-content');
-              if (element) {
-                element.style.display = element.style.display === 'none' ? 'block' : 'none';
-              }
-              const arrow = document.getElementById('ranking-arrow');
-              if (arrow) {
-                arrow.style.transform = arrow.style.transform === 'rotate(180deg)' ? 'rotate(0deg)' : 'rotate(180deg)';
-              }
-            }}
-          >
-            <Typography variant="h6">
-              🏆 Ranking de Satisfacción ({displayGrupos.reduce((total: number, group: any) => total + group.alumnos.length, 0)} estudiantes)
-            </Typography>
-            <Typography
-              id="ranking-arrow"
-              variant="h6"
+            <Box
+              id="groups-content"
               sx={{
-                transition: 'transform 0.2s',
-                userSelect: 'none'
+                p: 2,
+                pt: 0,
+                display: 'block'
               }}
             >
-              ▼
-            </Typography>
-          </Box>
-          <Box
-            id="ranking-content"
-            sx={{
-              p: 2,
-              pt: 0,
-              display: 'block'
-            }}
-          >
-            <Box sx={{ mt: 2 }}>
-              <Box sx={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 2fr', gap: 1, mb: 1, p: 1, bgcolor: 'grey.100', borderRadius: 0.5 }}>
-                <Typography variant="body2" fontWeight={600}>Nombre</Typography>
-                <Typography variant="body2" fontWeight={600}>Grupo</Typography>
-                <Typography variant="body2" fontWeight={600}>% Satisfacción</Typography>
-                <Typography variant="body2" fontWeight={600}>Tutores</Typography>
-              </Box>
-              {(() => {
-                // Create ranking array
-                const studentRanking: Array<{ name: string, group: string, satisfaction: number, tutorResults: Array<{ name: string, status: 'matched' | 'not_matched' | 'not_found' }> }> = [];
-
-                // Uses the main normalizeName function
-
-                // Uses the main calculateSimilarity function
-
-                const tutorFullNames = tutoresData.map((t: any) => ({
-                  original: `${t.Nombre} ${t.Apellido}`,
-                  normalized: normalizeName(`${t.Nombre} ${t.Apellido}`),
-                  firstName: t.Nombre,
-                  lastName: t.Apellido
-                }));
-                const validTutorNames = tutorFullNames.map(t => t.original);
-
-
-                displayGrupos.forEach((group: any) => {
-                  group.alumnos.forEach((alumno: any) => {
-                    // Find the original CSV data for this alumno
-                    const originalAlumno = alumnosData.find((a: any) =>
-                      a.Nombre === alumno.nombre && a.Apellido === alumno.apellido && a.Email === alumno.email
-                    ) as any;
-                    const { score, maxScore } = calculateMatchScore(originalAlumno || alumno, group.tutores);
-                    const satisfaction = maxScore > 0 ? (score / maxScore) * 100 : 0;
-
-                    // Calculate tutor matches with status
-                    const tutorResults: Array<{ name: string, status: 'matched' | 'not_matched' | 'not_found' }> = [];
-
-                    for (let i = 1; i <= 5; i++) {
-                      const tutorPref = originalAlumno?.[`Tutor${i}`];
-                      if (tutorPref) {
-                        let foundInGroup = false;
-                        let existsInDatabase = false;
-                        let bestSimilarity = 0;
-
-                        // Check against all valid tutors using same logic as warnings
-                        for (const validTutor of validTutorNames) {
-                          const similarity = calculateSimilarity(tutorPref, validTutor);
-                          if (similarity > bestSimilarity) {
-                            bestSimilarity = similarity;
-                          }
-                        }
-
-                        // Use same threshold logic as warning system
-                        const threshold = 1.0 - similarityThreshold;
-                        if (bestSimilarity >= threshold) {
-                          existsInDatabase = true;
-                        }
-
-
-                        // Check if tutor is in current group
-                        for (const groupTutor of group.tutores) {
-                          const similarity = calculateSimilarity(tutorPref, groupTutor);
-                          if (similarity >= threshold) {
-                            foundInGroup = true;
-                            break;
-                          }
-                        }
-
-                        if (foundInGroup) {
-                          tutorResults.push({ name: tutorPref, status: 'matched' });
-                        } else if (existsInDatabase) {
-                          tutorResults.push({ name: tutorPref, status: 'not_matched' });
-                        } else {
-                          tutorResults.push({ name: tutorPref, status: 'not_found' });
-                        }
-                      }
-                    }
-
-                    studentRanking.push({
-                      name: `${alumno.nombre} ${alumno.apellido}`,
-                      group: group.name,
-                      satisfaction: satisfaction,
-                      tutorResults: tutorResults
-                    });
-                  });
-                });
-
-                // Sort by satisfaction (best to worst)
-                studentRanking.sort((a, b) => b.satisfaction - a.satisfaction);
-
-                return studentRanking.map((student, index) => (
-                  <Box key={index} sx={{
-                    display: 'grid',
-                    gridTemplateColumns: '1.5fr 1fr 1fr 2fr',
-                    gap: 1,
-                    p: 1,
-                    borderBottom: '1px solid',
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
+                {displayGrupos.map((group: any) => (
+                  <Box key={group.id} sx={{
+                    p: 2,
+                    border: '1px solid',
                     borderColor: 'divider',
-                    '&:hover': { bgcolor: 'grey.50' }
+                    borderRadius: 1,
+                    bgcolor: 'background.paper'
                   }}>
-                    <Typography variant="body2">{student.name}</Typography>
-                    <Typography variant="body2">{student.group}</Typography>
-                    <Typography variant="body2" sx={{
-                      color: student.satisfaction >= 75 ? 'success.main' :
-                        student.satisfaction >= 50 ? '#FFC107' :
-                          student.satisfaction >= 25 ? 'warning.dark' :
-                            'error.main',
-                      fontWeight: 600
-                    }}>
-                      {student.satisfaction.toFixed(1)}%
-                    </Typography>
-                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                      {student.tutorResults.length > 0 ? student.tutorResults.map((tutor, tutorIndex) => (
-                        <Typography
-                          key={tutorIndex}
-                          variant="caption"
-                          sx={{
-                            px: 0.5,
-                            py: 0.25,
-                            borderRadius: 0.5,
-                            fontSize: '0.7rem',
-                            fontWeight: 500,
-                            color: 'white',
-                            bgcolor: tutor.status === 'matched' ? 'success.main' :
-                              tutor.status === 'not_matched' ? 'warning.main' :
-                                'error.main'
-                          }}
-                        >
-                          {tutor.name}
-                        </Typography>
-                      )) : (
-                        <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
-                          Sin preferencias
-                        </Typography>
-                      )}
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1 }}>
+                      <Typography variant="subtitle1" fontWeight={600}>
+                        {group.name}
+                      </Typography>
+                      <Typography variant="body2" color="text.secondary">
+                        {group.alumnos.length} / {group.maxCapacity} alumnos
+                      </Typography>
                     </Box>
+
+                    <Box sx={{ mb: 1 }}>
+                      <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                        Tutores:
+                      </Typography>
+                      <Typography variant="body2">
+                        {group.tutores.join(', ')}
+                      </Typography>
+                    </Box>
+
+                    {group.alumnos.length > 0 && (
+                      <Box>
+                        <Typography variant="body2" color="text.secondary" sx={{ mb: 0.5 }}>
+                          Alumnos:
+                        </Typography>
+                        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                          {group.alumnos.map((alumno: any, index: number) => {
+                            // Find the original CSV data for this alumno
+                            const originalAlumno = alumnosData.find((a: any) =>
+                              a.Nombre === alumno.nombre && a.Apellido === alumno.apellido && a.Email === alumno.email
+                            ) as any;
+                            const { score, maxScore } = calculateMatchScore(originalAlumno || alumno, group.tutores);
+                            const percentage = maxScore > 0 ? Math.round((score / maxScore) * 100) : 0;
+
+                            return (
+                              <Box key={index} sx={{
+                                px: 1,
+                                py: 0.5,
+                                bgcolor: 'grey.100',
+                                borderRadius: 0.5,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 1
+                              }}>
+                                <Typography variant="body2">
+                                  {alumno.nombre} {alumno.apellido}
+                                </Typography>
+                                <Typography variant="caption" sx={{
+                                  color: percentage >= 75 ? 'success.main' :
+                                    percentage >= 50 ? '#FFC107' :
+                                      percentage >= 25 ? 'warning.dark' :
+                                        'error.main',
+                                  fontWeight: 600
+                                }}>
+                                  ({score}/{maxScore})
+                                </Typography>
+                              </Box>
+                            );
+                          })}
+                        </Box>
+                      </Box>
+                    )}
                   </Box>
-                ));
-              })()}
+                ))}
+              </Box>
             </Box>
           </Box>
-        </Box>
 
-        {/* Tutor Ranking */}
-        <Box sx={{
-          border: '1px solid',
-          borderColor: 'divider',
-          borderRadius: 1,
-          mb: 2
-        }}>
-          <Box
-            sx={{
-              p: 2,
-              bgcolor: 'grey.50',
-              borderRadius: '4px 4px 0 0',
-              cursor: 'pointer',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              '&:hover': { bgcolor: 'grey.100' }
-            }}
-            onClick={() => {
-              const element = document.getElementById('tutor-ranking-content');
-              if (element) {
-                element.style.display = element.style.display === 'none' ? 'block' : 'none';
-              }
-              const arrow = document.getElementById('tutor-ranking-arrow');
-              if (arrow) {
-                arrow.style.transform = arrow.style.transform === 'rotate(180deg)' ? 'rotate(0deg)' : 'rotate(180deg)';
-              }
-            }}
-          >
-            <Typography variant="h6">
-              👨‍🏫 Ranking de Tutores ({tutoresData.length} tutores)
-            </Typography>
-            <Typography
-              id="tutor-ranking-arrow"
-              variant="h6"
+          {/* Student Satisfaction Ranking */}
+          <Box sx={{
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 1,
+            mb: 2
+          }}>
+            <Box
               sx={{
-                transition: 'transform 0.2s',
-                userSelect: 'none'
+                p: 2,
+                bgcolor: 'grey.50',
+                borderRadius: '4px 4px 0 0',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                '&:hover': { bgcolor: 'grey.100' }
+              }}
+              onClick={() => {
+                const element = document.getElementById('ranking-content');
+                if (element) {
+                  element.style.display = element.style.display === 'none' ? 'block' : 'none';
+                }
+                const arrow = document.getElementById('ranking-arrow');
+                if (arrow) {
+                  arrow.style.transform = arrow.style.transform === 'rotate(180deg)' ? 'rotate(0deg)' : 'rotate(180deg)';
+                }
               }}
             >
-              ▼
-            </Typography>
-          </Box>
-          <Box
-            id="tutor-ranking-content"
-            sx={{
-              p: 2,
-              pt: 0,
-              display: 'block'
-            }}
-          >
-            <Box sx={{ mt: 2 }}>
-              <Box sx={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 1, mb: 1, p: 1, bgcolor: 'grey.100', borderRadius: 0.5 }}>
-                <Typography variant="body2" fontWeight={600}>Tutor</Typography>
-                <Typography variant="body2" fontWeight={600}>Selecciones</Typography>
-                <Typography variant="body2" fontWeight={600}>Asignados</Typography>
-                <Typography variant="body2" fontWeight={600}>% Efectividad</Typography>
-              </Box>
-              {(() => {
-                // Create tutor ranking data
-                const tutorStats: Array<{ name: string, selected: number, matched: number, effectiveness: number }> = [];
+              <Typography variant="h6">
+                🏆 Ranking de Satisfacción ({displayGrupos.reduce((total: number, group: any) => total + group.alumnos.length, 0)} estudiantes)
+              </Typography>
+              <Typography
+                id="ranking-arrow"
+                variant="h6"
+                sx={{
+                  transition: 'transform 0.2s',
+                  userSelect: 'none'
+                }}
+              >
+                ▼
+              </Typography>
+            </Box>
+            <Box
+              id="ranking-content"
+              sx={{
+                p: 2,
+                pt: 0,
+                display: 'block'
+              }}
+            >
+              <Box sx={{ mt: 2 }}>
+                <Box sx={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 2fr', gap: 1, mb: 1, p: 1, bgcolor: 'grey.100', borderRadius: 0.5 }}>
+                  <Typography variant="body2" fontWeight={600}>Nombre</Typography>
+                  <Typography variant="body2" fontWeight={600}>Grupo</Typography>
+                  <Typography variant="body2" fontWeight={600}>% Satisfacción</Typography>
+                  <Typography variant="body2" fontWeight={600}>Tutores</Typography>
+                </Box>
+                {(() => {
+                  // Create ranking array
+                  const studentRanking: Array<{ name: string, group: string, satisfaction: number, tutorResults: Array<{ name: string, status: 'matched' | 'not_matched' | 'not_found' }> }> = [];
 
-                // Uses the main normalizeName function
+                  // Uses the main normalizeName function
 
-                // Count selections and matches for each tutor
-                const validTutorNames = tutoresData.map((t: any) => `${t.Nombre} ${t.Apellido}`);
+                  // Uses the main calculateSimilarity function
 
-                validTutorNames.forEach(tutorName => {
-                  let selectedCount = 0;
-                  let matchedCount = 0;
+                  const tutorFullNames = tutoresData.map((t: any) => ({
+                    original: `${t.Nombre} ${t.Apellido}`,
+                    normalized: normalizeName(`${t.Nombre} ${t.Apellido}`),
+                    firstName: t.Nombre,
+                    lastName: t.Apellido
+                  }));
+                  const validTutorNames = tutorFullNames.map(t => t.original);
+
 
                   displayGrupos.forEach((group: any) => {
                     group.alumnos.forEach((alumno: any) => {
@@ -1301,84 +1120,514 @@ const Maraton = () => {
                       const originalAlumno = alumnosData.find((a: any) =>
                         a.Nombre === alumno.nombre && a.Apellido === alumno.apellido && a.Email === alumno.email
                       ) as any;
+                      const { score, maxScore } = calculateMatchScore(originalAlumno || alumno, group.tutores);
+                      const satisfaction = maxScore > 0 ? (score / maxScore) * 100 : 0;
+
+                      // Calculate tutor matches with status
+                      const tutorResults: Array<{ name: string, status: 'matched' | 'not_matched' | 'not_found' }> = [];
+
                       for (let i = 1; i <= 5; i++) {
                         const tutorPref = originalAlumno?.[`Tutor${i}`];
                         if (tutorPref) {
-                          // Check if this preference matches current tutor (exact match after normalization)
-                          const norm1 = normalizeName(tutorPref);
-                          const norm2 = normalizeName(tutorName);
+                          let foundInGroup = false;
+                          let existsInDatabase = false;
+                          let bestSimilarity = 0;
 
-                          if (norm1 === norm2) {
-                            selectedCount++;
-
-                            // Check if student actually got this tutor in their group
-                            const foundInGroup = group.tutores.some((groupTutor: string) => {
-                              const normGroupTutor = normalizeName(groupTutor);
-                              return normGroupTutor === norm2;
-                            });
-
-                            if (foundInGroup) {
-                              matchedCount++;
+                          // Check against all valid tutors using same logic as warnings
+                          for (const validTutor of validTutorNames) {
+                            const similarity = calculateSimilarity(tutorPref, validTutor);
+                            if (similarity > bestSimilarity) {
+                              bestSimilarity = similarity;
                             }
+                          }
+
+                          // Use same threshold logic as warning system
+                          const threshold = 1.0 - similarityThreshold;
+                          if (bestSimilarity >= threshold) {
+                            existsInDatabase = true;
+                          }
+
+
+                          // Check if tutor is in current group
+                          for (const groupTutor of group.tutores) {
+                            const similarity = calculateSimilarity(tutorPref, groupTutor);
+                            if (similarity >= threshold) {
+                              foundInGroup = true;
+                              break;
+                            }
+                          }
+
+                          if (foundInGroup) {
+                            tutorResults.push({ name: tutorPref, status: 'matched' });
+                          } else if (existsInDatabase) {
+                            tutorResults.push({ name: tutorPref, status: 'not_matched' });
+                          } else {
+                            tutorResults.push({ name: tutorPref, status: 'not_found' });
                           }
                         }
                       }
+
+                      studentRanking.push({
+                        name: `${alumno.nombre} ${alumno.apellido}`,
+                        group: group.name,
+                        satisfaction: satisfaction,
+                        tutorResults: tutorResults
+                      });
                     });
                   });
 
-                  const effectiveness = selectedCount > 0 ? (matchedCount / selectedCount) * 100 : 0;
+                  // Sort by satisfaction (best to worst)
+                  studentRanking.sort((a, b) => b.satisfaction - a.satisfaction);
 
-                  tutorStats.push({
-                    name: tutorName,
-                    selected: selectedCount,
-                    matched: matchedCount,
-                    effectiveness: effectiveness
+                  return studentRanking.map((student, index) => (
+                    <Box key={index} sx={{
+                      display: 'grid',
+                      gridTemplateColumns: '1.5fr 1fr 1fr 2fr',
+                      gap: 1,
+                      p: 1,
+                      borderBottom: '1px solid',
+                      borderColor: 'divider',
+                      '&:hover': { bgcolor: 'grey.50' }
+                    }}>
+                      <Typography variant="body2">{student.name}</Typography>
+                      <Typography variant="body2">{student.group}</Typography>
+                      <Typography variant="body2" sx={{
+                        color: student.satisfaction >= 75 ? 'success.main' :
+                          student.satisfaction >= 50 ? '#FFC107' :
+                            student.satisfaction >= 25 ? 'warning.dark' :
+                              'error.main',
+                        fontWeight: 600
+                      }}>
+                        {student.satisfaction.toFixed(1)}%
+                      </Typography>
+                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                        {student.tutorResults.length > 0 ? student.tutorResults.map((tutor, tutorIndex) => (
+                          <Typography
+                            key={tutorIndex}
+                            variant="caption"
+                            sx={{
+                              px: 0.5,
+                              py: 0.25,
+                              borderRadius: 0.5,
+                              fontSize: '0.7rem',
+                              fontWeight: 500,
+                              color: 'white',
+                              bgcolor: tutor.status === 'matched' ? 'success.main' :
+                                tutor.status === 'not_matched' ? 'warning.main' :
+                                  'error.main'
+                            }}
+                          >
+                            {tutor.name}
+                          </Typography>
+                        )) : (
+                          <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                            Sin preferencias
+                          </Typography>
+                        )}
+                      </Box>
+                    </Box>
+                  ));
+                })()}
+              </Box>
+            </Box>
+          </Box>
+
+          {/* Tutor Ranking */}
+          <Box sx={{
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 1,
+            mb: 2
+          }}>
+            <Box
+              sx={{
+                p: 2,
+                bgcolor: 'grey.50',
+                borderRadius: '4px 4px 0 0',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                '&:hover': { bgcolor: 'grey.100' }
+              }}
+              onClick={() => {
+                const element = document.getElementById('tutor-ranking-content');
+                if (element) {
+                  element.style.display = element.style.display === 'none' ? 'block' : 'none';
+                }
+                const arrow = document.getElementById('tutor-ranking-arrow');
+                if (arrow) {
+                  arrow.style.transform = arrow.style.transform === 'rotate(180deg)' ? 'rotate(0deg)' : 'rotate(180deg)';
+                }
+              }}
+            >
+              <Typography variant="h6">
+                👨‍🏫 Ranking de Tutores ({tutoresData.length} tutores)
+              </Typography>
+              <Typography
+                id="tutor-ranking-arrow"
+                variant="h6"
+                sx={{
+                  transition: 'transform 0.2s',
+                  userSelect: 'none'
+                }}
+              >
+                ▼
+              </Typography>
+            </Box>
+            <Box
+              id="tutor-ranking-content"
+              sx={{
+                p: 2,
+                pt: 0,
+                display: 'block'
+              }}
+            >
+              <Box sx={{ mt: 2 }}>
+                <Box sx={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 1, mb: 1, p: 1, bgcolor: 'grey.100', borderRadius: 0.5 }}>
+                  <Typography variant="body2" fontWeight={600}>Tutor</Typography>
+                  <Typography variant="body2" fontWeight={600}>Selecciones</Typography>
+                  <Typography variant="body2" fontWeight={600}>Asignados</Typography>
+                  <Typography variant="body2" fontWeight={600}>% Efectividad</Typography>
+                </Box>
+                {(() => {
+                  // Create tutor ranking data
+                  const tutorStats: Array<{ name: string, selected: number, matched: number, effectiveness: number }> = [];
+
+                  // Uses the main normalizeName function
+
+                  // Count selections and matches for each tutor
+                  const validTutorNames = tutoresData.map((t: any) => `${t.Nombre} ${t.Apellido}`);
+
+                  validTutorNames.forEach(tutorName => {
+                    let selectedCount = 0;
+                    let matchedCount = 0;
+
+                    displayGrupos.forEach((group: any) => {
+                      group.alumnos.forEach((alumno: any) => {
+                        // Find the original CSV data for this alumno
+                        const originalAlumno = alumnosData.find((a: any) =>
+                          a.Nombre === alumno.nombre && a.Apellido === alumno.apellido && a.Email === alumno.email
+                        ) as any;
+                        for (let i = 1; i <= 5; i++) {
+                          const tutorPref = originalAlumno?.[`Tutor${i}`];
+                          if (tutorPref) {
+                            // Check if this preference matches current tutor (exact match after normalization)
+                            const norm1 = normalizeName(tutorPref);
+                            const norm2 = normalizeName(tutorName);
+
+                            if (norm1 === norm2) {
+                              selectedCount++;
+
+                              // Check if student actually got this tutor in their group
+                              const foundInGroup = group.tutores.some((groupTutor: string) => {
+                                const normGroupTutor = normalizeName(groupTutor);
+                                return normGroupTutor === norm2;
+                              });
+
+                              if (foundInGroup) {
+                                matchedCount++;
+                              }
+                            }
+                          }
+                        }
+                      });
+                    });
+
+                    const effectiveness = selectedCount > 0 ? (matchedCount / selectedCount) * 100 : 0;
+
+                    tutorStats.push({
+                      name: tutorName,
+                      selected: selectedCount,
+                      matched: matchedCount,
+                      effectiveness: effectiveness
+                    });
                   });
-                });
 
-                // Sort by selection count (most popular first), then by effectiveness
-                tutorStats.sort((a, b) => {
-                  if (a.selected !== b.selected) {
-                    return b.selected - a.selected;
-                  }
-                  return b.effectiveness - a.effectiveness;
-                });
+                  // Sort by selection count (most popular first), then by effectiveness
+                  tutorStats.sort((a, b) => {
+                    if (a.selected !== b.selected) {
+                      return b.selected - a.selected;
+                    }
+                    return b.effectiveness - a.effectiveness;
+                  });
 
-                return tutorStats.map((tutor, index) => (
-                  <Box key={index} sx={{
-                    display: 'grid',
-                    gridTemplateColumns: '2fr 1fr 1fr 1fr',
-                    gap: 1,
-                    p: 1,
-                    borderBottom: '1px solid',
-                    borderColor: 'divider',
-                    '&:hover': { bgcolor: 'grey.50' }
-                  }}>
-                    <Typography variant="body2">{tutor.name}</Typography>
-                    <Typography variant="body2" textAlign="center">{tutor.selected}</Typography>
-                    <Typography variant="body2" textAlign="center" sx={{
-                      color: tutor.matched > 0 ? 'success.main' : 'text.secondary'
+                  return tutorStats.map((tutor, index) => (
+                    <Box key={index} sx={{
+                      display: 'grid',
+                      gridTemplateColumns: '2fr 1fr 1fr 1fr',
+                      gap: 1,
+                      p: 1,
+                      borderBottom: '1px solid',
+                      borderColor: 'divider',
+                      '&:hover': { bgcolor: 'grey.50' }
                     }}>
-                      {tutor.matched}
-                    </Typography>
-                    <Typography variant="body2" textAlign="center" sx={{
-                      color: tutor.effectiveness >= 80 ? 'success.main' :
-                        tutor.effectiveness >= 50 ? 'warning.main' :
-                          tutor.effectiveness > 0 ? 'error.main' :
-                            'text.secondary',
-                      fontWeight: tutor.effectiveness > 0 ? 600 : 400
-                    }}>
-                      {tutor.selected > 0 ? `${tutor.effectiveness.toFixed(0)}%` : '-'}
-                    </Typography>
+                      <Typography variant="body2">{tutor.name}</Typography>
+                      <Typography variant="body2" textAlign="center">{tutor.selected}</Typography>
+                      <Typography variant="body2" textAlign="center" sx={{
+                        color: tutor.matched > 0 ? 'success.main' : 'text.secondary'
+                      }}>
+                        {tutor.matched}
+                      </Typography>
+                      <Typography variant="body2" textAlign="center" sx={{
+                        color: tutor.effectiveness >= 80 ? 'success.main' :
+                          tutor.effectiveness >= 50 ? 'warning.main' :
+                            tutor.effectiveness > 0 ? 'error.main' :
+                              'text.secondary',
+                        fontWeight: tutor.effectiveness > 0 ? 600 : 400
+                      }}>
+                        {tutor.selected > 0 ? `${tutor.effectiveness.toFixed(0)}%` : '-'}
+                      </Typography>
+                    </Box>
+                  ));
+                })()}
+              </Box>
+            </Box>
+          </Box>
+
+          {/* Genetic Algorithm Evolution */}
+          <Box sx={{
+            border: '1px solid',
+            borderColor: 'divider',
+            borderRadius: 1,
+            mb: 2
+          }}>
+            <Box
+              sx={{
+                p: 2,
+                bgcolor: 'grey.50',
+                borderRadius: '4px 4px 0 0',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                '&:hover': { bgcolor: 'grey.100' }
+              }}
+              onClick={() => {
+                const element = document.getElementById('evolution-content');
+                if (element) {
+                  element.style.display = element.style.display === 'none' ? 'block' : 'none';
+                }
+                const arrow = document.getElementById('evolution-arrow');
+                if (arrow) {
+                  arrow.style.transform = arrow.style.transform === 'rotate(180deg)' ? 'rotate(0deg)' : 'rotate(180deg)';
+                }
+              }}
+            >
+              <Typography variant="h6">
+                🧬 Evolución del Algoritmo Genético ({result.history.generations ? result.history.generations.length : 0} generaciones)
+              </Typography>
+              <Typography
+                id="evolution-arrow"
+                variant="h6"
+                sx={{
+                  transition: 'transform 0.2s',
+                  userSelect: 'none'
+                }}
+              >
+                ▼
+              </Typography>
+            </Box>
+            <Box
+              id="evolution-content"
+              sx={{
+                p: 2,
+                pt: 0,
+                display: 'none'
+              }}
+            >
+              {result.history.generations && result.history.generations.length > 0 && (
+                <Box sx={{ mt: 2 }}>
+                  {/* Summary Stats */}
+                  <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 2, mb: 3 }}>
+                    <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'primary.light', color: 'primary.contrastText', borderRadius: 1 }}>
+                      <Typography variant="h6" fontWeight={600}>
+                        {result.history.generations.length}
+                      </Typography>
+                      <Typography variant="caption">
+                        Generaciones
+                      </Typography>
+                    </Box>
+                    <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'success.light', color: 'success.contrastText', borderRadius: 1 }}>
+                      <Typography variant="h6" fontWeight={600}>
+                        {champion.fitness.toFixed(2)}
+                      </Typography>
+                      <Typography variant="caption">
+                        Mejor Fitness
+                      </Typography>
+                    </Box>
+                    <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'info.light', color: 'info.contrastText', borderRadius: 1 }}>
+                      <Typography variant="h6" fontWeight={600}>
+                        {result.history.endTime ? ((result.history.endTime - result.history.inititialTime) / 1000).toFixed(1) : '0.0'}s
+                      </Typography>
+                      <Typography variant="caption">
+                        Duración
+                      </Typography>
+                    </Box>
+                    <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'warning.light', color: 'warning.contrastText', borderRadius: 1 }}>
+                      <Typography variant="h6" fontWeight={600}>
+                        {Object.keys(result.history.individuals).length}
+                      </Typography>
+                      <Typography variant="caption">
+                        Combinaciones
+                      </Typography>
+                    </Box>
                   </Box>
-                ));
-              })()}
+
+                  {/* Simple Evolution Chart */}
+                  <Box sx={{ mb: 3 }}>
+                    <Typography variant="body1" fontWeight={600} sx={{ mb: 2 }}>
+                      Evolución del Fitness por Generación
+                    </Typography>
+                    <Box sx={{
+                      border: '1px solid',
+                      borderColor: 'divider',
+                      borderRadius: 1,
+                      p: 2,
+                      bgcolor: 'background.paper',
+                      position: 'relative',
+                      height: 200,
+                      overflow: 'hidden'
+                    }}>
+                      {(() => {
+                        // Generate fitness data for visualization
+                        const generations = result.history.generations;
+                        const maxFitness = Math.max(...generations.map(g => g.bestFitness));
+                        const minFitness = Math.min(...generations.map(g => g.worstFitness));
+                        const range = maxFitness - minFitness || 1;
+
+                        return (
+                          <Box sx={{ position: 'relative', height: '100%' }}>
+                            {/* Chart area */}
+                            <svg width="100%" height="100%" viewBox="0 0 600 180">
+                              {/* Grid lines */}
+                              {[0, 25, 50, 75, 100].map(y => (
+                                <line
+                                  key={y}
+                                  x1="50"
+                                  y1={30 + (y * 120 / 100)}
+                                  x2="580"
+                                  y2={30 + (y * 120 / 100)}
+                                  stroke="#e0e0e0"
+                                  strokeWidth="1"
+                                />
+                              ))}
+
+                              {/* Best fitness line */}
+                              <polyline
+                                fill="none"
+                                stroke="#4caf50"
+                                strokeWidth="2"
+                                points={generations.map((gen, i) => {
+                                  const x = 50 + (i * 530 / (generations.length - 1 || 1));
+                                  const y = 150 - ((gen.bestFitness - minFitness) / range * 120);
+                                  return `${x},${y}`;
+                                }).join(' ')}
+                              />
+
+                              {/* Average fitness line */}
+                              <polyline
+                                fill="none"
+                                stroke="#ff9800"
+                                strokeWidth="2"
+                                points={generations.map((gen, i) => {
+                                  const x = 50 + (i * 530 / (generations.length - 1 || 1));
+                                  const y = 150 - ((gen.averageFitness - minFitness) / range * 120);
+                                  return `${x},${y}`;
+                                }).join(' ')}
+                              />
+
+                              {/* Worst fitness line */}
+                              <polyline
+                                fill="none"
+                                stroke="#f44336"
+                                strokeWidth="2"
+                                points={generations.map((gen, i) => {
+                                  const x = 50 + (i * 530 / (generations.length - 1 || 1));
+                                  const y = 150 - ((gen.worstFitness - minFitness) / range * 120);
+                                  return `${x},${y}`;
+                                }).join(' ')}
+                              />
+
+                              {/* Y-axis labels */}
+                              <text x="40" y="35" textAnchor="end" fontSize="10" fill="#666">{maxFitness.toFixed(1)}</text>
+                              <text x="40" y="95" textAnchor="end" fontSize="10" fill="#666">{(minFitness + range / 2).toFixed(1)}</text>
+                              <text x="40" y="155" textAnchor="end" fontSize="10" fill="#666">{minFitness.toFixed(1)}</text>
+
+                              {/* X-axis labels */}
+                              <text x="50" y="170" textAnchor="middle" fontSize="10" fill="#666">0</text>
+                              <text x="580" y="170" textAnchor="middle" fontSize="10" fill="#666">{generations.length}</text>
+                            </svg>
+
+                            {/* Legend */}
+                            <Box sx={{
+                              position: 'absolute',
+                              top: 8,
+                              right: 8,
+                              display: 'flex',
+                              gap: 2,
+                              bgcolor: 'rgba(255,255,255,0.9)',
+                              p: 1,
+                              borderRadius: 0.5
+                            }}>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <Box sx={{ width: 12, height: 2, bgcolor: '#4caf50' }} />
+                                <Typography variant="caption">Mejor</Typography>
+                              </Box>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <Box sx={{ width: 12, height: 2, bgcolor: '#ff9800' }} />
+                                <Typography variant="caption">Promedio</Typography>
+                              </Box>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <Box sx={{ width: 12, height: 2, bgcolor: '#f44336' }} />
+                                <Typography variant="caption">Peor</Typography>
+                              </Box>
+                            </Box>
+                          </Box>
+                        );
+                      })()}
+                    </Box>
+                  </Box>
+
+                  {/* Parameters Used */}
+                  <Box>
+                    <Typography variant="body1" fontWeight={600} sx={{ mb: 2 }}>
+                      Parámetros Utilizados
+                    </Typography>
+                    <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 2 }}>
+                      <Box sx={{ p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+                        <Typography variant="caption" color="text.secondary">Semilla</Typography>
+                        <Typography variant="body2" fontWeight={600}>{result.parameters.seed}</Typography>
+                      </Box>
+                      <Box sx={{ p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+                        <Typography variant="caption" color="text.secondary">Población</Typography>
+                        <Typography variant="body2" fontWeight={600}>{result.parameters.populationSize}</Typography>
+                      </Box>
+                      <Box sx={{ p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+                        <Typography variant="caption" color="text.secondary">Mutación</Typography>
+                        <Typography variant="body2" fontWeight={600}>{(result.parameters.mutationRate * 100).toFixed(1)}%</Typography>
+                      </Box>
+                      <Box sx={{ p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+                        <Typography variant="caption" color="text.secondary">Crossover</Typography>
+                        <Typography variant="body2" fontWeight={600}>{(result.parameters.crossoverRate * 100).toFixed(1)}%</Typography>
+                      </Box>
+                      <Box sx={{ p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+                        <Typography variant="caption" color="text.secondary">Torneo</Typography>
+                        <Typography variant="body2" fontWeight={600}>{result.parameters.tournamentSize}</Typography>
+                      </Box>
+                      <Box sx={{ p: 1.5, bgcolor: 'grey.50', borderRadius: 1 }}>
+                        <Typography variant="caption" color="text.secondary">Elitismo</Typography>
+                        <Typography variant="body2" fontWeight={600}>{result.parameters.elitismCount}</Typography>
+                      </Box>
+                    </Box>
+                  </Box>
+                </Box>
+              )}
             </Box>
           </Box>
         </Box>
       </Box>
-    </Box>
-  );
+    );
   };
 
   return <>
@@ -1422,7 +1671,15 @@ export default function App() {
         </Box>
       )}
       <IconButton onClick={() => setSidebarOpen(!sidebarOpen)}>
-        {sidebarOpen ? <ChevronLeftIcon /> : <MenuIcon />}
+        {sidebarOpen ? <ChevronLeftIcon /> : (
+          <Box sx={{ width: 32, height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <img
+              src="emprending-ico.png"
+              alt="Emprending Logo"
+              style={{ width: '28px', height: 'auto' }}
+            />
+          </Box>
+        )}
       </IconButton>
     </Box>
     <Divider />

@@ -78,11 +78,12 @@ interface History {
     generations: Generation[];
 };
 
-interface Result {
-    warnings: Warnings;
-    history: History;
-    parameters: OptimizationParameters
-}
+// Result interface is used for typing in the main app
+// interface Result {
+//     warnings: Warnings;
+//     history: History;
+//     parameters: OptimizationParameters
+// }
 
 interface AlumnoData { nombre: string, apellido: string, email: string, value: number, tutores: string[] }
 
@@ -272,7 +273,7 @@ self.onmessage = (e) => {
         return { perfectFitness, maxTeoricalFitness };
     };
 
-    const calculateFitness = (grupos: Grupo[], alumnos: Alumno[], parameters: OptimizationParameters): number => {
+    const calculateFitness = (grupos: Grupo[], _alumnos: Alumno[], parameters: OptimizationParameters): number => {
         let fitness = 0;
         let penalty = 0;
 
@@ -328,7 +329,7 @@ self.onmessage = (e) => {
                 const slot = slots[grupos.length];
                 const usedTutoresIds = grupos.map(x => x.tutores.map(y => y.id)).flat();
 
-                const tutoresGrupo: Tutor[] = alumno.tutores.reduce((p, t, i) => {
+                const tutoresGrupo: Tutor[] = alumno.tutores.reduce((p, t) => {
                     if (!usedTutoresIds.includes(t.id) && slot.tutoresSlots > p.length) {
                         p.push(t);
                     }
@@ -345,7 +346,7 @@ self.onmessage = (e) => {
                 slots.push({ almunosSlots, tutoresSlots })
             }
 
-            const grupos = individual.reduce((grupos, alumnoId, i) => {
+            const grupos = individual.reduce((grupos, alumnoId) => {
                 const alumno = alumnos.find(a => a.id === alumnoId) as Alumno;
                 const bestAvailableGroup = grupos.filter((x, i) => x.alumnos.length < slots[i].almunosSlots).sort((a, b) => {
                     return groupFitness(alumno, b) - groupFitness(alumno, a)

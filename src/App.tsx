@@ -1,4 +1,4 @@
-import { useState, useEffect, type SyntheticEvent } from 'react'
+import { useState, type SyntheticEvent } from 'react'
 import { useSelector, useDispatch } from 'react-redux'
 import './App.css'
 
@@ -6,7 +6,7 @@ import * as React from 'react';
 import { Box, Button, Divider, Drawer, TextField, IconButton, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Tab, Tabs, Typography, Modal, LinearProgress } from '@mui/material';
 import { ChevronLeft as ChevronLeftIcon, Download as DownloadIcon, Groups as GroupsIcon, School as SchoolIcon, UploadFile as UploadFileIcon } from '@mui/icons-material';
 import { DataGrid, type GridColDef } from '@mui/x-data-grid';
-import { RootState, AppDispatch } from './store/store';
+import type { RootState, AppDispatch } from './store/store';
 import { setParameters, setFile, optimizeGroups } from './store/appSlice';
 
 interface Warnings {

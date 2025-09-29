@@ -170,13 +170,17 @@ const initialState: AppState = {
 // Import the worker using Vite's worker syntax
 import OptimizerWorker from '../optimizer.worker.ts?worker';
 
-export const optimizeGroups = createAsyncThunk(
+export const optimizeGroups = createAsyncThunk<
+  Result,
+  void,
+  { state: { app: AppState } }
+>(
   'app/optimizeGroups',
-  async (payload, { getState, rejectWithValue, dispatch }) => {
+  async (_, { getState, dispatch }) => {
     console.log("optimizeGroups")
-    return new Promise((resolve, reject) => {
+    return new Promise<Result>((resolve, reject) => {
       const worker = new OptimizerWorker();
-      let state = getState() as AppState;
+      let state = getState().app;
       worker.onmessage = (e) => {
         if (e.data.type === "error") {
           reject(new Error(e.data.error));
@@ -194,7 +198,7 @@ export const optimizeGroups = createAsyncThunk(
         reject(new Error('Worker failed to load or execute'));
         worker.terminate();
       };
-      worker.postMessage(state);
+      worker.postMessage({ app: state });
     });
   }
 );
@@ -265,7 +269,7 @@ const appSlice = createSlice({
       })
       .addCase(optimizeGroups.rejected, (state, action) => {
         state.running = false;
-        state.optimizationError = action.payload as string;
+        state.optimizationError = action.error.message || 'Optimization failed';
       });
   },
 });

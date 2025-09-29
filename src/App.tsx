@@ -840,7 +840,7 @@ const Maraton = () => {
                 })()
               }>
                 {(() => {
-                  if (!champion.fitness) return '0.0%';
+                  if (!champion.fitness) return '0.00%';
                   const percentage = (champion.fitness / (maxTeoricalFitness || 0)) * 100;
                   return `${Math.min(percentage, 100).toFixed(1)}%`;
                 })()}

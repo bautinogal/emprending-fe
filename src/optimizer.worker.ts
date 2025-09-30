@@ -413,7 +413,7 @@ self.onmessage = (e) => {
                 slots.push({ almunosSlots, tutoresSlots })
             }
 
-            const gruposIniciales = tutores.reduce((p, t, i) => {
+            const gruposIniciales = tutores.reduce((p, t) => {
                 let grupo = p.find((g, i) => g.tutores.length < slots[i].tutoresSlots);
                 if (grupo) {
                     grupo?.tutores?.push(t);

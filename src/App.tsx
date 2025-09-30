@@ -1041,25 +1041,11 @@ const Maraton = () => {
               <Typography variant="h6">
                 🏆 Ranking de Satisfacción ({displayGrupos.reduce((total: number, group: any) => total + group.alumnos.length, 0)} estudiantes)
               </Typography>
-              <Typography
-                id="ranking-arrow"
-                variant="h6"
-                sx={{
-                  transition: 'transform 0.2s',
-                  userSelect: 'none'
-                }}
-              >
+              <Typography id="ranking-arrow" variant="h6" sx={{ transition: 'transform 0.2s', userSelect: 'none' }}>
                 ▼
               </Typography>
             </Box>
-            <Box
-              id="ranking-content"
-              sx={{
-                p: 2,
-                pt: 0,
-                display: 'block'
-              }}
-            >
+            <Box id="ranking-content" sx={{ p: 2, pt: 0, display: 'block' }}>
               <Box sx={{ mt: 2 }}>
                 <Box sx={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 2fr', gap: 1, mb: 1, p: 1, bgcolor: 'grey.100', borderRadius: 0.5 }}>
                   <Typography variant="body2" fontWeight={600}>Nombre</Typography>
@@ -1067,90 +1053,23 @@ const Maraton = () => {
                   <Typography variant="body2" fontWeight={600}>% Satisfacción</Typography>
                   <Typography variant="body2" fontWeight={600}>Tutores</Typography>
                 </Box>
-                {(() => {
-                  // Create ranking array
-                  const studentRanking: Array<{ name: string, group: string, satisfaction: number, tutorResults: Array<{ name: string, status: 'matched' | 'not_matched' | 'not_found' }> }> = [];
-
-                  // Uses the main normalizeName function
-
-                  // Uses the main calculateSimilarity function
-
-                  const tutorFullNames = tutoresData.map((t: any) => ({
-                    original: `${t.Nombre} ${t.Apellido}`,
-                    normalized: normalizeName(`${t.Nombre} ${t.Apellido}`),
-                    firstName: t.Nombre,
-                    lastName: t.Apellido
-                  }));
-                  const validTutorNames = tutorFullNames.map(t => t.original);
-
-
-                  displayGrupos.forEach((group: any) => {
-                    group.alumnos.forEach((alumno: any) => {
-                      // Find the original CSV data for this alumno
-                      const originalAlumno = alumnosData.find((a: any) =>
-                        a.Nombre === alumno.nombre && a.Apellido === alumno.apellido && a.Email === alumno.email
-                      ) as any;
-                      const { score, maxScore } = calculateMatchScore(originalAlumno || alumno, group.tutores);
-                      const satisfaction = maxScore > 0 ? (score / maxScore) * 100 : 0;
-
-                      // Calculate tutor matches with status
-                      const tutorResults: Array<{ name: string, status: 'matched' | 'not_matched' | 'not_found' }> = [];
-
-                      for (let i = 1; i <= 5; i++) {
-                        const tutorPref = originalAlumno?.[`Tutor${i}`];
-                        if (tutorPref) {
-                          let foundInGroup = false;
-                          let existsInDatabase = false;
-                          let bestSimilarity = 0;
-
-                          // Check against all valid tutors using same logic as warnings
-                          for (const validTutor of validTutorNames) {
-                            const similarity = calculateSimilarity(tutorPref, validTutor);
-                            if (similarity > bestSimilarity) {
-                              bestSimilarity = similarity;
-                            }
-                          }
-
-                          // Use same threshold logic as warning system
-                          const threshold = 1.0 - similarityThreshold;
-                          if (bestSimilarity >= threshold) {
-                            existsInDatabase = true;
-                          }
-
-
-                          // Check if tutor is in current group
-                          for (const groupTutor of group.tutores) {
-                            const similarity = calculateSimilarity(tutorPref, groupTutor);
-                            if (similarity >= threshold) {
-                              foundInGroup = true;
-                              break;
-                            }
-                          }
-
-                          if (foundInGroup) {
-                            tutorResults.push({ name: tutorPref, status: 'matched' });
-                          } else if (existsInDatabase) {
-                            tutorResults.push({ name: tutorPref, status: 'not_matched' });
-                          } else {
-                            tutorResults.push({ name: tutorPref, status: 'not_found' });
-                          }
-                        }
-                      }
-
-                      studentRanking.push({
-                        name: `${alumno.nombre} ${alumno.apellido}`,
-                        group: group.name,
-                        satisfaction: satisfaction,
-                        tutorResults: tutorResults
-                      });
-                    });
+                {result.history.champion.grupos.map((group: Grupo, i) => {
+                  const tutoresIds = group.tutores.map(x => x.id);
+                  return group.alumnos.map((alumno: Alumno) => {
+                    return {
+                      ...alumno, grupo: "Grupo " + (i+1), tutores: alumno.tutores.map((tutor: Tutor) => {
+                        let estado = tutor.id === -1 ? "Not Found" : (tutoresIds.includes(tutor.id) ? "Included" : "Missed");
+                        return { ...tutor, estado };
+                      })
+                    }
                   });
-
-                  // Sort by satisfaction (best to worst)
-                  studentRanking.sort((a, b) => b.satisfaction - a.satisfaction);
-
-                  return studentRanking.map((student, index) => (
-                    <Box key={index} sx={{
+                }).flat().map((alumno) => {
+                  const pesoRelativoTutores = result.parameters.pesoRelativoTutores;
+                  const satisfaction = 100 * alumno.tutores.reduce((p, x, i) => p + (x.estado === "Included" ? pesoRelativoTutores[i] : 0), 0) /
+                    pesoRelativoTutores.reduce((p, _x, i) => p + (i < alumno.tutores.length ? pesoRelativoTutores[i] : 0), 0);
+                  return { ...alumno, satisfaction };
+                }).sort((a,b) => b.satisfaction - a.satisfaction).map((student, index) => {
+                  return <Box key={index} sx={{
                       display: 'grid',
                       gridTemplateColumns: '1.5fr 1fr 1fr 2fr',
                       gap: 1,
@@ -1159,8 +1078,8 @@ const Maraton = () => {
                       borderColor: 'divider',
                       '&:hover': { bgcolor: 'grey.50' }
                     }}>
-                      <Typography variant="body2">{student.name}</Typography>
-                      <Typography variant="body2">{student.group}</Typography>
+                      <Typography variant="body2">{student.nombre} {student.apellido}</Typography>
+                      <Typography variant="body2">{student.grupo}</Typography>
                       <Typography variant="body2" sx={{
                         color: student.satisfaction >= 75 ? 'success.main' :
                           student.satisfaction >= 50 ? '#FFC107' :
@@ -1171,7 +1090,7 @@ const Maraton = () => {
                         {student.satisfaction.toFixed(1)}%
                       </Typography>
                       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                        {student.tutorResults.length > 0 ? student.tutorResults.map((tutor, tutorIndex) => (
+                        {student.tutores.length > 0 ? student.tutores?.map((tutor, tutorIndex) => (
                           <Typography
                             key={tutorIndex}
                             variant="caption"
@@ -1182,12 +1101,11 @@ const Maraton = () => {
                               fontSize: '0.7rem',
                               fontWeight: 500,
                               color: 'white',
-                              bgcolor: tutor.status === 'matched' ? 'success.main' :
-                                tutor.status === 'not_matched' ? 'warning.main' :
-                                  'error.main'
+                              bgcolor: tutor.estado === 'Included' ? 'success.main' :
+                                tutor.estado === 'Missed' ? 'warning.main' : 'error.main'
                             }}
                           >
-                            {tutor.name}
+                            {tutor.nombre} {tutor.apellido}
                           </Typography>
                         )) : (
                           <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
@@ -1196,8 +1114,7 @@ const Maraton = () => {
                         )}
                       </Box>
                     </Box>
-                  ));
-                })()}
+                })}
               </Box>
             </Box>
           </Box>

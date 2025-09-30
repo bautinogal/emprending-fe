@@ -39,6 +39,7 @@ interface Individual {
     generation: number;
     extintGeneration: number | null;
     alumnosIds: number[];
+    tutoresIds: number[];
     grupos: Grupo[];
     fitness: number;
 };
@@ -121,9 +122,10 @@ const mulberry32 = (seed: number) => {
     };
 };
 
-const hashArray = (arr: number[]): string => {
-    return arr.join(',');
+const hashArray = (arr: number[] | [number[], number[]]): string => {
+    return arr.flat().join(',');
 };
+
 
 const shuffleArray = <T>(array: T[], seed: number): T[] => {
     const random = mulberry32(seed);
@@ -295,12 +297,105 @@ self.onmessage = (e) => {
         return Math.max(0, fitness - penalty);
     };
 
-    const calculateGrupos = (individual: number[], alumnos: Alumno[], tutores: Tutor[], parameters: OptimizationParameters): Grupo[] => {
+    const calculateGrupos = (individual: [number[], number[]], alumnos: Alumno[], tutores: Tutor[], parameters: OptimizationParameters): Grupo[] => {
 
-        const getGroups = (groupsN: number): { grupos: Grupo[], fitness: number } => {
+        // const getGroups = (groupsN: number): { grupos: Grupo[], fitness: number } => {
+
+        //     interface Slot { almunosSlots: number, tutoresSlots: number }
+
+        //     const alumnoFitness = (alumno: Alumno, grupo: Grupo): number => {
+        //         const idTutoresGrupo = grupo.tutores.map(x => x.id);
+        //         const idTutoresPreferidos = alumno.tutores.map(t => t.id);
+        //         return idTutoresPreferidos.reduce((pre, tutorPref, i) => {
+        //             if (idTutoresGrupo.includes(tutorPref)) {
+        //                 pre = pre + alumno.value * parameters.pesoRelativoTutores[i];
+        //             }
+        //             return pre;
+        //         }, 0);
+        //     };
+
+        //     const getBestAvailableGroup = (alumno: Alumno, grupos: Grupo[], slots: Slot[]): { currentPotentialGroupPos: number, updatedPotentialGroup: Grupo | null } => {
+
+        //         const getPotentialGroup = (grupo: Grupo, slot: Slot): Grupo => {
+        //             const tutoresOcupadosIds = grupos
+        //                 .reduce((p, g) =>
+        //                     p.concat(g.tutores.map(t => t.id)), [] as number[])
+
+        //             const newTutores = alumno.tutores
+        //                 .filter(t => !tutoresOcupadosIds.includes(t.id))
+        //                 .slice(0, slot.tutoresSlots - grupo.tutores.length);
+
+        //             return {
+        //                 alumnos: [...grupo.alumnos, alumno],
+        //                 tutores: [...grupo.tutores, ...newTutores]
+        //             }
+        //         };
+
+        //         let currentPotentialGroupPos = -1;
+        //         let bestFitness = -1;
+        //         let updatedPotentialGroup = null;
+
+        //         for (let i = 0; i < grupos.length; i++) {
+        //             if (grupos[i].alumnos.length < slots[i].almunosSlots) {
+        //                 const potentialGroup = getPotentialGroup(grupos[i], slots[i]);
+        //                 const grupoFitness = alumnoFitness(alumno, potentialGroup);
+        //                 if (grupoFitness > bestFitness) {
+        //                     bestFitness = grupoFitness;
+        //                     updatedPotentialGroup = potentialGroup;
+        //                 }
+        //             }
+        //         }
+        //         console.log({ currentPotentialGroupPos, updatedPotentialGroup })
+        //         return { currentPotentialGroupPos, updatedPotentialGroup };
+        //     };
+
+        //     const getNewGroup = (alumno: Alumno, grupos: Grupo[], slots: Slot[]): Grupo => {
+        //         const slot = slots[grupos.length];
+        //         const usedTutoresIds = grupos.map(x => x.tutores.map(y => y.id)).flat();
+
+        //         const tutoresGrupo: Tutor[] = alumno.tutores.reduce((p, t) => {
+        //             if (!usedTutoresIds.includes(t.id) && slot.tutoresSlots > p.length) {
+        //                 p.push(t);
+        //             }
+        //             return p;
+        //         }, [] as Tutor[]);
+
+        //         return { alumnos: [alumno], tutores: tutoresGrupo };
+        //     };
+
+        //     const slots: Slot[] = [];
+        //     for (let i = 0; i < groupsN; i++) {
+        //         let almunosSlots = Math.floor(alumnos.length / groupsN + (alumnos.length % groupsN > i ? 1 : 0));
+        //         let tutoresSlots = Math.floor(tutores.length / groupsN + (tutores.length % groupsN > i ? 1 : 0));
+        //         slots.push({ almunosSlots, tutoresSlots })
+        //     }
+
+        //     const grupos = individual.reduce((grupos, alumnoId) => {
+        //         const alumno = alumnos.find(a => a.id === alumnoId) as Alumno;
+        //         let { currentPotentialGroupPos, updatedPotentialGroup } = getBestAvailableGroup(alumno, grupos, slots);
+
+        //         const bestNewGroup = grupos.length < groupsN ? getNewGroup(alumno, grupos, slots) : null;
+
+        //         if (!updatedPotentialGroup && bestNewGroup) grupos.push(bestNewGroup as Grupo);
+        //         else if (!bestNewGroup && updatedPotentialGroup) grupos[currentPotentialGroupPos] = updatedPotentialGroup;
+        //         else if (bestNewGroup && updatedPotentialGroup)
+        //             alumnoFitness(alumno, bestNewGroup) > alumnoFitness(alumno, updatedPotentialGroup) ?
+        //                 grupos.push(bestNewGroup as Grupo) : (grupos[currentPotentialGroupPos] = updatedPotentialGroup);
+        //         else throw "Something went wrong!";
+
+        //         return grupos;
+        //     }, [] as Grupo[]);
+
+        //     const fitness = calculateFitness(grupos, alumnos, parameters);
+
+        //     return { grupos, fitness }
+        // };
+
+        const getGroupsDummy = (groupsN: number): { grupos: Grupo[], fitness: number } => {
 
             interface Slot { almunosSlots: number, tutoresSlots: number }
-            const groupFitness = (alumno: Alumno, grupo: Grupo): number => {
+
+            const alumnoFitness = (alumno: Alumno, grupo: Grupo): number => {
                 const idTutoresGrupo = grupo.tutores.map(x => x.id);
                 const idTutoresPreferidos = alumno.tutores.map(t => t.id);
                 return idTutoresPreferidos.reduce((pre, tutorPref, i) => {
@@ -311,43 +406,33 @@ self.onmessage = (e) => {
                 }, 0);
             };
 
-            const getNewGroup = (alumno: Alumno, grupos: Grupo[], slots: Slot[]): Grupo => {
-                const slot = slots[grupos.length];
-                const usedTutoresIds = grupos.map(x => x.tutores.map(y => y.id)).flat();
-
-                const tutoresGrupo: Tutor[] = alumno.tutores.reduce((p, t) => {
-                    if (!usedTutoresIds.includes(t.id) && slot.tutoresSlots > p.length) {
-                        p.push(t);
-                    }
-                    return p;
-                }, [] as Tutor[]);
-
-                return { alumnos: [alumno], tutores: tutoresGrupo };
-            };
-
             const slots: Slot[] = [];
             for (let i = 0; i < groupsN; i++) {
-                let almunosSlots = alumnos.length / groupsN + (alumnos.length % groupsN > i ? 1 : 0);
-                let tutoresSlots = tutores.length / groupsN + (tutores.length % groupsN > i ? 1 : 0);
+                let almunosSlots = Math.floor(alumnos.length / groupsN + (alumnos.length % groupsN > i ? 1 : 0));
+                let tutoresSlots = Math.floor(tutores.length / groupsN + (tutores.length % groupsN > i ? 1 : 0));
                 slots.push({ almunosSlots, tutoresSlots })
             }
 
-            const grupos = individual.reduce((grupos, alumnoId) => {
-                const alumno = alumnos.find(a => a.id === alumnoId) as Alumno;
-                const bestAvailableGroup = grupos.filter((x, i) => x.alumnos.length < slots[i].almunosSlots).sort((a, b) => {
-                    return groupFitness(alumno, b) - groupFitness(alumno, a)
-                })[0];
-                const bestNewGroup = grupos.length < groupsN ? getNewGroup(alumno, grupos, slots) : null;
+            const gruposIniciales = tutores.reduce((p, t, i) => {
+                let grupo = p.find((g, i) => g.tutores.length < slots[i].tutoresSlots);
+                if (grupo) {
+                    grupo?.tutores?.push(t);
+                } else if (p.length < slots.length) {
+                    p.push({ alumnos: [], tutores: [t] })
+                }
+                return p;
+            }, [] as Grupo[])
 
-                if (!bestAvailableGroup && bestNewGroup) grupos.push(bestNewGroup as Grupo);
-                else if (!bestNewGroup && bestAvailableGroup) bestAvailableGroup.alumnos.push(alumno);
-                else if (bestNewGroup && bestAvailableGroup)
-                    groupFitness(alumno, bestNewGroup) > groupFitness(alumno, bestAvailableGroup) ?
-                        grupos.push(bestNewGroup as Grupo) : bestAvailableGroup.alumnos.push(alumno);
-                else throw "Something went wrong!";
+            const grupos = individual[1].reduce((grupos, alumnoId) => {
+                let alumno = alumnos.find(x => x.id === alumnoId) as Alumno;
+                let target = grupos
+                    .filter((g, i) => g.alumnos.length < slots[i].almunosSlots)
+                    .sort((a, b) => alumnoFitness(alumno, b) - alumnoFitness(alumno, a))[0]
 
+                target?.alumnos?.push(alumno);
                 return grupos;
-            }, [] as Grupo[]);
+            }, gruposIniciales);
+
             const fitness = calculateFitness(grupos, alumnos, parameters);
 
             return { grupos, fitness }
@@ -355,13 +440,13 @@ self.onmessage = (e) => {
 
         const minGroups = Math.max(parameters.minCantidadGrupos, Math.ceil(tutores.length / parameters.maxTutoresPorGrupo), Math.ceil(alumnos.length / parameters.maxAlumnosPorGrupo));
         const maxGroups = Math.min(parameters.maxCantidadGrupos, Math.floor(tutores.length / parameters.minTutoresPorGrupo), Math.floor(alumnos.length / parameters.minAlumnosPorGrupo));
-        if(maxGroups < minGroups) throw new Error("Restricciones incompatibles!");
-        console.log({minGroups, maxGroups});
+        if (maxGroups < minGroups) throw new Error("Restricciones incompatibles!");
+
         const posibleResults = [];
         for (let i = minGroups; i <= maxGroups; i++) {
-            posibleResults.push(getGroups(i));
+            posibleResults.push(getGroupsDummy(i));
         }
-        if (posibleResults.length === 0) throw new Error("Restricciones incompatibles!");
+
         return posibleResults.sort((a, b) => b.fitness - a.fitness)[0].grupos;
     };
 
@@ -372,22 +457,24 @@ self.onmessage = (e) => {
 
         for (let i = 0; i < parameters.populationSize; i++) {
             let seed = Math.floor(rng() * 1000000);
-            let individual = shuffleArray(alumnosIds, seed);
-            let hash = hashArray(individual);
+            let individualAlumnosIds = shuffleArray(alumnosIds, seed);
+            seed = Math.floor(rng() * 1000000);
+            let individualTutoresIds = shuffleArray(alumnosIds, seed);
+            let hash = hashArray(individualAlumnosIds.concat(individualTutoresIds));
             let counter = 0;
 
             while (individuals[hash] != null) {
                 console.log('Duplicate individual found, reshuffling...');
                 seed = Math.floor(rng() * 1000000);
-                individual = shuffleArray(alumnosIds, seed);
-                hash = hashArray(individual);
+                individualAlumnosIds = shuffleArray(alumnosIds, seed);
+                hash = hashArray(individualAlumnosIds);
                 counter++;
                 if (counter > 100) {
                     console.error('Too many attempts to find a unique individual');
                     break;
                 }
             };
-            const grupos = calculateGrupos(individual, alumnos, tutores, parameters);
+            const grupos = calculateGrupos([individualAlumnosIds, tutores.map(t => t.id)], alumnos, tutores, parameters);
             const fitness = calculateFitness(grupos, alumnos, parameters);
 
             individuals[hash] = {
@@ -395,7 +482,8 @@ self.onmessage = (e) => {
                 parentB: null,
                 generation: 0,
                 extintGeneration: null,
-                alumnosIds: individual,
+                alumnosIds: individualAlumnosIds,
+                tutoresIds: individualTutoresIds,
                 grupos,
                 fitness,
             };
@@ -451,7 +539,7 @@ self.onmessage = (e) => {
         let duplicateAttempts = 0;
 
         for (let i = 0; i < offspringNeeded; i++) {
-            let offspring: number[] | null = null;
+            let offspring: [number[], number[]] | null = null;
             let offspringHash: string | null = null;
             let attempts = 0;
             const maxAttempts = 100;
@@ -462,8 +550,8 @@ self.onmessage = (e) => {
                 const parentAHash = tournamentSelect(currentPopulation, history.individuals, parameters.tournamentSize, rng);
                 const parentBHash = tournamentSelect(currentPopulation, history.individuals, parameters.tournamentSize, rng);
 
-                const parentA = history.individuals[parentAHash].alumnosIds;
-                const parentB = history.individuals[parentBHash].alumnosIds;
+                const parentA = [history.individuals[parentAHash].alumnosIds, history.individuals[parentAHash].tutoresIds] as [number[], number[]];
+                const parentB = [history.individuals[parentBHash].alumnosIds, history.individuals[parentBHash].tutoresIds] as [number[], number[]];
 
                 // Crossover
                 if (rng() < parameters.crossoverRate) {
@@ -477,7 +565,7 @@ self.onmessage = (e) => {
                     offspring = mutate(offspring, rng);
                 }
 
-                offspringHash = hashArray(offspring);
+                offspringHash = hashArray(offspring[0].concat(offspring[1]));
 
                 // Check for duplicates in both existing individuals and new generation
                 if (!history.individuals[offspringHash] && !generation.individuals.includes(offspringHash)) {
@@ -490,7 +578,8 @@ self.onmessage = (e) => {
                         parentB: parentBHash,
                         generation: history.generations.length + 1,
                         extintGeneration: null,
-                        alumnosIds: offspring,
+                        alumnosIds: offspring[0],
+                        tutoresIds: offspring[1],
                         grupos,
                         fitness
                     };
@@ -518,8 +607,8 @@ self.onmessage = (e) => {
             // use forced mutation to ensure uniqueness
             if (attempts >= maxAttempts) {
                 generation.shuffleRepeats++;
-                offspring = forcedUniqueIndividual(alumnos.map(a => a.id), history.individuals, generation.individuals, rng);
-                offspringHash = hashArray(offspring);
+                offspring = forcedUniqueIndividual(alumnos.map(a => a.id), tutores.map(t => t.id), history.individuals, generation.individuals, rng);
+                offspringHash = hashArray(offspring as [number[], number[]]);
 
                 const grupos = calculateGrupos(offspring, alumnos, tutores, parameters);
                 const fitness = calculateFitness(grupos, alumnos, parameters);
@@ -529,7 +618,8 @@ self.onmessage = (e) => {
                     parentB: null,
                     generation: history.generations.length + 1,
                     extintGeneration: null,
-                    alumnosIds: offspring,
+                    alumnosIds: offspring[0],
+                    tutoresIds: offspring[1],
                     grupos,
                     fitness
                 };
@@ -587,55 +677,77 @@ self.onmessage = (e) => {
         );
     };
 
-    const crossover = (parentA: number[], parentB: number[], rng: Function): number[] => {
+    const crossover = (parentA: [number[], number[]], parentB: [number[], number[]], rng: Function): [number[], number[]] => {
         // Order crossover (OX) - good for permutations
-        const size = parentA.length;
-        const start = Math.floor(rng() * size);
-        const end = Math.floor(rng() * (size - start)) + start;
+        const alumnosSize = parentA[0].length;
+        const alumnosStart = Math.floor(rng() * alumnosSize);
+        const alumnosEnd = Math.floor(rng() * (alumnosSize - alumnosStart)) + alumnosStart;
 
-        const offspring = new Array(size).fill(-1);
+        const tutoresSize = parentA[0].length;
+        const tutoresStart = Math.floor(rng() * tutoresSize);
+        const tutoresEnd = Math.floor(rng() * (tutoresSize - tutoresStart)) + tutoresStart;
+
+        const offspring = [new Array(alumnosSize).fill(-1), new Array(tutoresSize).fill(-1)] as [number[], number[]];
 
         // Copy segment from parentA
-        for (let i = start; i <= end; i++) {
-            offspring[i] = parentA[i];
+        for (let i = alumnosStart; i <= alumnosEnd; i++) {
+            offspring[0][i] = parentA[0][i];
+        }
+        for (let i = tutoresStart; i <= tutoresEnd; i++) {
+            offspring[1][i] = parentA[1][i];
         }
 
         // Fill remaining positions from parentB
         let currentPos = 0;
-        for (let i = 0; i < size; i++) {
-            if (!offspring.includes(parentB[i])) {
-                while (offspring[currentPos] !== -1) {
+        for (let i = 0; i < alumnosSize; i++) {
+            if (!offspring[0].includes(parentB[0][i])) {
+                while (offspring[0][currentPos] !== -1) {
                     currentPos++;
                 }
-                offspring[currentPos] = parentB[i];
+                offspring[0][currentPos] = parentB[0][i];
+            }
+        }
+        currentPos = 0;
+        for (let i = 0; i < tutoresSize; i++) {
+            if (!offspring[1].includes(parentB[1][i])) {
+                while (offspring[1][currentPos] !== -1) {
+                    currentPos++;
+                }
+                offspring[1][currentPos] = parentB[1][i];
             }
         }
 
         return offspring;
     };
 
-    const mutate = (individual: number[], rng: Function): number[] => {
-        const mutated = [...individual];
+    const mutate = (individual: [number[], number[]], rng: Function): [number[], number[]] => {
+        const mutated = [[...individual[0]], [...individual[1]]] as [number[], number[]];
+
         // Swap mutation
-        const pos1 = Math.floor(rng() * mutated.length);
-        const pos2 = Math.floor(rng() * mutated.length);
-        [mutated[pos1], mutated[pos2]] = [mutated[pos2], mutated[pos1]];
+        if (rng() > 0.5) {
+            const pos1 = Math.floor(rng() * mutated[0].length);
+            const pos2 = Math.floor(rng() * mutated[0].length);
+            [mutated[0][pos1], mutated[0][pos2]] = [mutated[0][pos2], mutated[0][pos1]];
+        } else {
+            const pos1 = Math.floor(rng() * mutated[1].length);
+            const pos2 = Math.floor(rng() * mutated[1].length);
+            [mutated[1][pos1], mutated[1][pos2]] = [mutated[1][pos2], mutated[1][pos1]];
+        }
+
+
         return mutated;
     };
 
-    const forcedUniqueIndividual = (
-        alumnosIds: number[],
-        existingIndividuals: { [key: string]: Individual },
-        newGeneration: string[],
-        rng: Function
-    ): number[] => {
-        let individual: number[];
+    const forcedUniqueIndividual = (alumnosIds: number[], tutoresIds: number[], existingIndividuals: { [key: string]: Individual }, newGeneration: string[], rng: Function): [number[], number[]] => {
+        let individual: [number[], number[]];
         let hash: string;
 
         // Keep shuffling until we get a unique one
         do {
-            const seed = Math.floor(rng() * 1000000000);
-            individual = shuffleArray(alumnosIds, seed);
+            individual = [
+                shuffleArray(alumnosIds, Math.floor(rng() * 1000000000)),
+                shuffleArray(tutoresIds, Math.floor(rng() * 1000000000))
+            ];
             hash = hashArray(individual);
         } while (existingIndividuals[hash] || newGeneration.includes(hash));
 

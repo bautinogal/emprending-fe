@@ -476,18 +476,53 @@ const Maraton = () => {
 
     const ParametrosMaraton = () => {
 
+      const ErrorModal = () => {
+        const optimizationError = useSelector((state: RootState) => state.app.optimizationError);
+        const dispatch = useDispatch<AppDispatch>();
+
+        const handleClose = () => {
+          dispatch({ type: 'app/clearOptimizationError' });
+        };
+
+        return (
+          <Modal
+            open={!!optimizationError}
+            onClose={handleClose}
+            sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}
+          >
+            <Box sx={{ bgcolor: 'background.paper', borderRadius: 2, boxShadow: 24, p: 4, minWidth: 400, maxWidth: 600 }}>
+              <Typography variant="h5" sx={{ mb: 3, textAlign: 'center', fontWeight: 600, color: 'error.main' }}>
+                ❌ Error en la Optimización
+              </Typography>
+
+              <Box sx={{ mb: 3, p: 2, bgcolor: '#ffebee', borderRadius: 1, border: '1px solid', borderColor: 'error.main' }}>
+                <Typography variant="body1" sx={{ color: 'error.dark', whiteSpace: 'pre-wrap' }}>
+                  {optimizationError}
+                </Typography>
+              </Box>
+
+              <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+                <Button variant="contained" color="error" onClick={handleClose}>
+                  Cerrar
+                </Button>
+              </Box>
+            </Box>
+          </Modal>
+        );
+      }
+
       const RecalculateButton = () => {
+
+        const running = useSelector((state: RootState) => state.app.running);
+        const alumnosData = useSelector((state: RootState) => state.app.alumnosData);
+        const tutoresData = useSelector((state: RootState) => state.app.tutoresData);
 
         const onRecalculate = () => {
           console.log('Handle Recalculate triggered');
           dispatch(optimizeGroups());
         };
 
-        const running = useSelector((state: RootState) => state.app.running);
-        const alumnosData = useSelector((state: RootState) => state.app.alumnosData);
-        const tutoresData = useSelector((state: RootState) => state.app.tutoresData);
-
-        return <Button variant="contained" onClick={onRecalculate} disabled={running || !alumnosData || !tutoresData} sx={{ bgcolor: 'primary.main' }} >
+        return <Button variant="contained" onClick={onRecalculate} disabled={running || !alumnosData?.length || !tutoresData?.length} sx={{ bgcolor: 'primary.main' }} >
           Recalcular Grupos
         </Button>
       };
@@ -558,26 +593,24 @@ const Maraton = () => {
           <Typography variant="body1" sx={{ mb: 1 }}>
             Sensibilidad de coincidencia de nombres: {(similarityThreshold * 100).toFixed(0)}%
           </Typography>
-          <Typography variant="caption">Estricto</Typography>
+          <Typography variant="caption">Flexible</Typography>
           <input
             type="range"
             min="0"
             max="100"
             value={similarityThreshold * 100}
             onChange={(e) => dispatch(setParameters({ similarityThreshold: Number(e.target.value) / 100 }))}
-            style={{
-              width: '300px',
-              cursor: 'pointer'
-            }}
+            style={{ width: '300px', cursor: 'pointer' }}
           />
-          <Typography variant="caption">Flexible</Typography>
+          <Typography variant="caption">Estricto</Typography>
           <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-            0% = Solo coincidencias exactas | 100% = Acepta variaciones (acentos, abreviaciones)
+            0% = Acepta variaciones (acentos, abreviaciones) | 100% = Solo coincidencias exactas 
           </Typography>
         </Box>
       }
 
       return <>
+        <ErrorModal />
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Typography variant="h5" fontWeight={600} children={"Parámetros de la Maratón"} />
           <RecalculateButton />
@@ -905,10 +938,31 @@ const Maraton = () => {
               >
                 <Box>
                   {result.warnings.tutoresNotFound.map((warning: any, index: number) => (
-                    <Typography key={index} variant="body2" sx={{ mb: 1, color: 'warning.dark' }}>
-                      • Alumno {warning.alumno} buscó a {warning.tutor}
-                      {warning.closest && ` (¿Quizás ${warning.closest}?)`}
-                    </Typography>
+                    <Box key={index} sx={{ mb: 1, display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography variant="body2" sx={{ color: 'warning.dark' }}>
+                        • Alumno {warning.alumno} buscó a {warning.tutor}
+                        {warning.closest && ` (¿Quizás ${warning.closest}?)`}
+                      </Typography>
+                      {warning.score !== undefined && (
+                        <Typography
+                          variant="caption"
+                          sx={{
+                            px: 1,
+                            py: 0.25,
+                            borderRadius: 0.5,
+                            fontWeight: 600,
+                            bgcolor: warning.score >= 0.75 ? '#4caf5020' :
+                                     warning.score >= 0.5 ? '#ff980020' :
+                                     '#f4433620',
+                            color: warning.score >= 0.75 ? 'success.main' :
+                                   warning.score >= 0.5 ? 'warning.main' :
+                                   'error.main'
+                          }}
+                        >
+                          {(warning.score * 100).toFixed(0)}% coincidencia
+                        </Typography>
+                      )}
+                    </Box>
                   ))}
                 </Box>
                 <Typography variant="caption" sx={{ mt: 1, display: 'block', color: 'warning.dark' }}>
@@ -1057,7 +1111,7 @@ const Maraton = () => {
                   const tutoresIds = group.tutores.map(x => x.id);
                   return group.alumnos.map((alumno: Alumno) => {
                     return {
-                      ...alumno, grupo: "Grupo " + (i+1), tutores: alumno.tutores.map((tutor: Tutor) => {
+                      ...alumno, grupo: "Grupo " + (i + 1), tutores: alumno.tutores.map((tutor: Tutor) => {
                         let estado = tutor.id === -1 ? "Not Found" : (tutoresIds.includes(tutor.id) ? "Included" : "Missed");
                         return { ...tutor, estado };
                       })
@@ -1068,52 +1122,52 @@ const Maraton = () => {
                   const satisfaction = 100 * alumno.tutores.reduce((p, x, i) => p + (x.estado === "Included" ? pesoRelativoTutores[i] : 0), 0) /
                     pesoRelativoTutores.reduce((p, _x, i) => p + (i < alumno.tutores.length ? pesoRelativoTutores[i] : 0), 0);
                   return { ...alumno, satisfaction };
-                }).sort((a,b) => b.satisfaction - a.satisfaction).map((student, index) => {
+                }).sort((a, b) => b.satisfaction - a.satisfaction).map((student, index) => {
                   return <Box key={index} sx={{
-                      display: 'grid',
-                      gridTemplateColumns: '1.5fr 1fr 1fr 2fr',
-                      gap: 1,
-                      p: 1,
-                      borderBottom: '1px solid',
-                      borderColor: 'divider',
-                      '&:hover': { bgcolor: 'grey.50' }
+                    display: 'grid',
+                    gridTemplateColumns: '1.5fr 1fr 1fr 2fr',
+                    gap: 1,
+                    p: 1,
+                    borderBottom: '1px solid',
+                    borderColor: 'divider',
+                    '&:hover': { bgcolor: 'grey.50' }
+                  }}>
+                    <Typography variant="body2">{student.nombre} {student.apellido}</Typography>
+                    <Typography variant="body2">{student.grupo}</Typography>
+                    <Typography variant="body2" sx={{
+                      color: student.satisfaction >= 75 ? 'success.main' :
+                        student.satisfaction >= 50 ? '#FFC107' :
+                          student.satisfaction >= 25 ? 'warning.dark' :
+                            'error.main',
+                      fontWeight: 600
                     }}>
-                      <Typography variant="body2">{student.nombre} {student.apellido}</Typography>
-                      <Typography variant="body2">{student.grupo}</Typography>
-                      <Typography variant="body2" sx={{
-                        color: student.satisfaction >= 75 ? 'success.main' :
-                          student.satisfaction >= 50 ? '#FFC107' :
-                            student.satisfaction >= 25 ? 'warning.dark' :
-                              'error.main',
-                        fontWeight: 600
-                      }}>
-                        {student.satisfaction.toFixed(1)}%
-                      </Typography>
-                      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                        {student.tutores.length > 0 ? student.tutores?.map((tutor, tutorIndex) => (
-                          <Typography
-                            key={tutorIndex}
-                            variant="caption"
-                            sx={{
-                              px: 0.5,
-                              py: 0.25,
-                              borderRadius: 0.5,
-                              fontSize: '0.7rem',
-                              fontWeight: 500,
-                              color: 'white',
-                              bgcolor: tutor.estado === 'Included' ? 'success.main' :
-                                tutor.estado === 'Missed' ? 'warning.main' : 'error.main'
-                            }}
-                          >
-                            {tutor.nombre} {tutor.apellido}
-                          </Typography>
-                        )) : (
-                          <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
-                            Sin preferencias
-                          </Typography>
-                        )}
-                      </Box>
+                      {student.satisfaction.toFixed(1)}%
+                    </Typography>
+                    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
+                      {student.tutores.length > 0 ? student.tutores?.map((tutor, tutorIndex) => (
+                        <Typography
+                          key={tutorIndex}
+                          variant="caption"
+                          sx={{
+                            px: 0.5,
+                            py: 0.25,
+                            borderRadius: 0.5,
+                            fontSize: '0.7rem',
+                            fontWeight: 500,
+                            color: 'white',
+                            bgcolor: tutor.estado === 'Included' ? 'success.main' :
+                              tutor.estado === 'Missed' ? 'warning.main' : 'error.main'
+                          }}
+                        >
+                          {tutor.nombre} {tutor.apellido}
+                        </Typography>
+                      )) : (
+                        <Typography variant="caption" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                          Sin preferencias
+                        </Typography>
+                      )}
                     </Box>
+                  </Box>
                 })}
               </Box>
             </Box>

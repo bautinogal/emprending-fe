@@ -278,20 +278,6 @@ self.onmessage = (e) => {
         let penalty = 0;
 
         grupos.forEach(grupo => {
-            // // Check for constraint violations
-            // if (grupo.alumnos.length > parameters.maxAlumnosPorGrupo) {
-            //   // Heavy penalty for exceeding max students
-            //   penalty += (grupo.alumnos.length - parameters.maxAlumnosPorGrupo) * 1000;
-            // }
-            // if (grupo.tutores.length < parameters.minTutoresPorGrupo) {
-            //   // Heavy penalty for not meeting min tutors
-            //   penalty += (parameters.minTutoresPorGrupo - grupo.tutores.length) * 1000;
-            // }
-            // if (grupo.tutores.length > parameters.maxTutoresPorGrupo) {
-            //   // Penalty for exceeding max tutors
-            //   penalty += (grupo.tutores.length - parameters.maxTutoresPorGrupo) * 500;
-            // }
-
             // Calculate positive fitness from matches
             const idTutoresGrupo = grupo.tutores.map(t => t.id);
             fitness += grupo.alumnos.reduce((pr, alumno) => {
@@ -369,12 +355,13 @@ self.onmessage = (e) => {
 
         const minGroups = Math.max(parameters.minCantidadGrupos, Math.ceil(tutores.length / parameters.maxTutoresPorGrupo), Math.ceil(alumnos.length / parameters.maxAlumnosPorGrupo));
         const maxGroups = Math.min(parameters.maxCantidadGrupos, Math.floor(tutores.length / parameters.minTutoresPorGrupo), Math.floor(alumnos.length / parameters.minAlumnosPorGrupo));
-
+        if(maxGroups < minGroups) throw new Error("Restricciones incompatibles!");
+        console.log({minGroups, maxGroups});
         const posibleResults = [];
         for (let i = minGroups; i <= maxGroups; i++) {
             posibleResults.push(getGroups(i));
         }
-        if (posibleResults.length === 0) throw "Restricciones incompatibles!";
+        if (posibleResults.length === 0) throw new Error("Restricciones incompatibles!");
         return posibleResults.sort((a, b) => b.fitness - a.fitness)[0].grupos;
     };
 
@@ -714,7 +701,7 @@ self.onmessage = (e) => {
         console.error('Error optimizing groups:', error);
         self.postMessage({
             type: "error",
-            error: error instanceof Error ? error.message : 'Optimization failed'
+            error: error instanceof Error ? error.message : 'Optimization failed',
         });
     }
 

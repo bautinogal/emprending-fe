@@ -136,7 +136,7 @@ const initialState: AppState = {
 
   parameters: {
     seed: 42,
-    geneticIterations: 250,
+    geneticIterations: 50,
     populationSize: 100,
     mutationRate: 0.35,
     crossoverRate: 0.75,
@@ -149,7 +149,7 @@ const initialState: AppState = {
     maxAlumnosPorGrupo: 20,
     minTutoresPorGrupo: 3,
     maxTutoresPorGrupo: 6,
-    similarityThreshold: 0.8,
+    similarityThreshold: 1,
     pesoRelativoTutores: [10, 8, 5, 3, 1],
   },
 

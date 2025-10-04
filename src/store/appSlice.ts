@@ -166,9 +166,9 @@ const initialState: AppState = {
     maxTutoresPorGrupo: 8,
     similarityThreshold: 1,
     pesoRelativoTutores: [10, 8, 5, 3, 2],
-    inequalityAversion: 10,
+    inequalityAversion: 0,
     maxGroupsPerStudent: 1,
-    slotsAreTimeFrames: false,
+    slotsAreTimeFrames: true,
   },
 
   running: false,
@@ -210,7 +210,7 @@ export const optimizeGroups = createAsyncThunk<
           state = { ...state, running: false }
 
         };
-      }
+      };
       worker.onerror = (e) => {
         console.log("onerror:", e);
         reject(new Error('Worker failed to load or execute'));

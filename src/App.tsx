@@ -47,7 +47,6 @@ interface Alumno { nombre: string, apellido: string, email: string, value: numbe
 
 interface Grupo { tutores: Tutor[], alumnos: Alumno[] };
 
-
 interface Individual {
   parentA: string | null;
   parentB: string | null;
@@ -613,10 +612,10 @@ const Maraton = () => {
             Horarios
           </Typography>
           <Checkbox
-            value={slotsAreTimeFrames}
+            checked={slotsAreTimeFrames}
             onChange={(e) => dispatch(setParameters({
-              slotsAreTimeFrames: Boolean(e.target.value),
-              maxGroupsPerStudent: Boolean(e.target.value) ? 5 : 1
+              slotsAreTimeFrames: e.target.checked,
+              maxGroupsPerStudent: e.target.checked ? 5 : 1
             }))}
           />
         </Box>
@@ -973,7 +972,8 @@ const Maraton = () => {
                 onClick={() => {
                   const element = document.getElementById('tutor-warnings-content');
                   if (element) {
-                    element.style.display = element.style.display === 'none' ? 'block' : 'none';
+                    const isHidden = element.style.display === 'none' || !element.style.display;
+                    element.style.display = isHidden ? 'block' : 'none';
                   }
                   const arrow = document.getElementById('tutor-warnings-arrow');
                   if (arrow) {
@@ -982,7 +982,7 @@ const Maraton = () => {
                 }}
               >
                 <Typography variant="h6" sx={{ color: 'warning.dark' }}>
-                  ⚠️ Advertencias de Tutores ({result.warnings.tutoresNotFound.length})
+                  ⚠️ Advertencias ({result.warnings.tutoresNotFound.length})
                 </Typography>
                 <Typography
                   id="tutor-warnings-arrow"
@@ -1001,7 +1001,7 @@ const Maraton = () => {
                 sx={{
                   p: 2,
                   pt: 0,
-                  display: 'block'
+                  display: 'none'
                 }}
               >
                 <Box>
@@ -1040,6 +1040,112 @@ const Maraton = () => {
             </Box>
           )}
 
+          {/* Time Slots Table - Only visible if slotsAreTimeFrames is true */}
+          {result.parameters.slotsAreTimeFrames && (
+            <Box sx={{
+              border: '1px solid',
+              borderColor: 'divider',
+              borderRadius: 1,
+              mb: 2
+            }}>
+              <Box
+                sx={{
+                  p: 2,
+                  bgcolor: 'grey.50',
+                  borderRadius: '4px 4px 0 0',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  '&:hover': { bgcolor: 'grey.100' }
+                }}
+                onClick={() => {
+                  const element = document.getElementById('timeslots-content');
+                  if (element) {
+                    const isHidden = element.style.display === 'none' || !element.style.display;
+                    element.style.display = isHidden ? 'block' : 'none';
+                  }
+                  const arrow = document.getElementById('timeslots-arrow');
+                  if (arrow) {
+                    arrow.style.transform = arrow.style.transform === 'rotate(180deg)' ? 'rotate(0deg)' : 'rotate(180deg)';
+                  }
+                }}
+              >
+                <Typography variant="h6">
+                  🕒 Horarios por Grupo ({displayGrupos.length} grupos)
+                </Typography>
+                <Typography
+                  id="timeslots-arrow"
+                  variant="h6"
+                  sx={{
+                    transition: 'transform 0.2s',
+                    userSelect: 'none'
+                  }}
+                >
+                  ▼
+                </Typography>
+              </Box>
+              <Box id="timeslots-content" sx={{ p: 2, pt: 0, display: 'none' }}>
+                <Box sx={{ mt: 2, overflowX: 'auto' }}>
+                  <table style={{ borderCollapse: 'collapse', tableLayout: 'fixed' }}>
+                    <thead>
+                      <tr>
+                        {displayGrupos.map((_grupo, index) => (
+                          <th
+                            key={index}
+                            style={{
+                              border: '1px solid #e0e0e0',
+                              padding: '12px',
+                              backgroundColor: '#f5f5f5',
+                              fontWeight: 600,
+                              textAlign: 'left',
+                              minWidth: '200px',
+                              width: '200px'
+                            }}
+                          >
+                            Grupo {index + 1}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr style={{ height: '400px' }}>
+                        {displayGrupos.map((grupo, index) => (
+                          <td
+                            key={index}
+                            style={{
+                              border: '1px solid #e0e0e0',
+                              padding: '12px',
+                              verticalAlign: 'top',
+                              minWidth: '200px',
+                              width: '200px',
+                              height: '400px'
+                            }}
+                          >
+                            {grupo.alumnos.map((alumno: Alumno, alumnoIndex: number) => (
+                              <Box
+                                key={alumnoIndex}
+                                sx={{
+                                  mb: 1,
+                                  pb: 1,
+                                  borderBottom: alumnoIndex < grupo.alumnos.length - 1 ? '1px solid #f0f0f0' : 'none'
+                                }}
+                              >
+                                <Typography variant="body2">
+                                  {alumno.nombre} {alumno.apellido}
+                                </Typography>
+                              </Box>
+                            ))}
+                          </td>
+                        ))}
+                      </tr>
+                    </tbody>
+                  </table>
+                </Box>
+              </Box>
+            </Box>
+          )}
+
           {/* Groups Collapsible Section */}
           <Box sx={{
             border: '1px solid',
@@ -1061,7 +1167,8 @@ const Maraton = () => {
               onClick={() => {
                 const element = document.getElementById('groups-content');
                 if (element) {
-                  element.style.display = element.style.display === 'none' ? 'block' : 'none';
+                  const isHidden = element.style.display === 'none' || !element.style.display;
+                  element.style.display = isHidden ? 'block' : 'none';
                 }
                 const arrow = document.getElementById('groups-arrow');
                 if (arrow) {
@@ -1083,7 +1190,7 @@ const Maraton = () => {
                 ▼
               </Typography>
             </Box>
-            <Box id="groups-content" sx={{ p: 2, pt: 0, display: 'block' }} >
+            <Box id="groups-content" sx={{ p: 2, pt: 0, display: 'none' }} >
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
                 {result.champion.grupos.map((grupo, i) => {
                   const alumnos = grupo.alumnos || [];
@@ -1152,7 +1259,8 @@ const Maraton = () => {
               onClick={() => {
                 const element = document.getElementById('ranking-content');
                 if (element) {
-                  element.style.display = element.style.display === 'none' ? 'block' : 'none';
+                  const isHidden = element.style.display === 'none' || !element.style.display;
+                  element.style.display = isHidden ? 'block' : 'none';
                 }
                 const arrow = document.getElementById('ranking-arrow');
                 if (arrow) {
@@ -1167,7 +1275,7 @@ const Maraton = () => {
                 ▼
               </Typography>
             </Box>
-            <Box id="ranking-content" sx={{ p: 2, pt: 0, display: 'block' }}>
+            <Box id="ranking-content" sx={{ p: 2, pt: 0, display: 'none' }}>
               <Box sx={{ mt: 2 }}>
                 <Box sx={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 2fr', gap: 1, mb: 1, p: 1, bgcolor: 'grey.100', borderRadius: 0.5 }}>
                   <Typography variant="body2" fontWeight={600}>Nombre</Typography>
@@ -1262,7 +1370,8 @@ const Maraton = () => {
               onClick={() => {
                 const element = document.getElementById('tutor-ranking-content');
                 if (element) {
-                  element.style.display = element.style.display === 'none' ? 'block' : 'none';
+                  const isHidden = element.style.display === 'none' || !element.style.display;
+                  element.style.display = isHidden ? 'block' : 'none';
                 }
                 const arrow = document.getElementById('tutor-ranking-arrow');
                 if (arrow) {
@@ -1289,7 +1398,7 @@ const Maraton = () => {
               sx={{
                 p: 2,
                 pt: 0,
-                display: 'block'
+                display: 'none'
               }}
             >
               <Box sx={{ mt: 2 }}>
@@ -1415,7 +1524,8 @@ const Maraton = () => {
               onClick={() => {
                 const element = document.getElementById('evolution-content');
                 if (element) {
-                  element.style.display = element.style.display === 'none' ? 'block' : 'none';
+                  const isHidden = element.style.display === 'none' || !element.style.display;
+                  element.style.display = isHidden ? 'block' : 'none';
                 }
                 const arrow = document.getElementById('evolution-arrow');
                 if (arrow) {

@@ -36,14 +36,18 @@ interface Alumno { nombre: string, apellido: string, email: string, value: numbe
 
 interface Grupo { tutores: Tutor[], alumnos: Alumno[] };
 
+interface Slot { alumnosSlots: number, tutoresSlots: number }
 
 interface Individual {
     parentA: string | null;
     parentB: string | null;
     generation: number;
     extintGeneration: number | null;
+
     alumnosIds: number[];
     tutoresIds: number[];
+    slots: Slot[];
+
     grupos: Grupo[];
     fitness: number;
 };
@@ -125,10 +129,9 @@ const mulberry32 = (seed: number) => {
     };
 };
 
-const hashArray = (arr: number[] | [number[], number[]]): string => {
+const hashArray = (arr: number[] | [number[], number[], number[]]): string => {
     return arr.flat().join(',');
 };
-
 
 const shuffleArray = <T>(array: T[], seed: number): T[] => {
     const random = mulberry32(seed);
@@ -314,11 +317,42 @@ self.onmessage = (e) => {
         return Math.max(0, fitness);
     };
 
-    const calculateGrupos = (individual: [number[], number[]], alumnos: Alumno[], tutores: Tutor[], parameters: OptimizationParameters): Grupo[] => {
+    const getSlots = (parameters: OptimizationParameters, alumnos: Alumno[], tutores: Tutor[], rnd: number): Slot[] => {
+        const generateConstrainedArray = (seed: number, minLength: number, maxLength: number, minValue: number, maxValue: number): number[] => {
+            const rng = mulberry32(seed);
+
+            // Determine array length within constraints
+            const length = Math.floor(rng() * (maxLength - minLength + 1)) + minLength;
+
+            // Generate random values for each slot
+            const array = new Array(length).fill(0).map(() => {
+                return Math.floor(rng() * (maxValue - minValue + 1)) + minValue;
+            });
+
+            return array;
+        };
+
+        // const minGroups = Math.max(parameters.minCantidadGrupos, Math.ceil(tutores.length / parameters.maxTutoresPorGrupo), Math.ceil(alumnos.length / parameters.maxAlumnosPorGrupo));
+        // const maxGroups = Math.min(parameters.maxCantidadGrupos, Math.floor(tutores.length / parameters.minTutoresPorGrupo), Math.floor(alumnos.length / parameters.minAlumnosPorGrupo));
+        const minGroups = Math.max(parameters.minCantidadGrupos);
+        const maxGroups = Math.min(
+            parameters.maxCantidadGrupos,
+            Math.floor(tutores.length / parameters.minTutoresPorGrupo),
+            Math.floor(alumnos.length / parameters.minAlumnosPorGrupo)
+        );
+
+        if (maxGroups < minGroups) throw new Error("Restricciones incompatibles!");
+
+        const tutoresSlots = generateConstrainedArray(rnd, minGroups, maxGroups, parameters.minTutoresPorGrupo, parameters.maxTutoresPorGrupo);
+
+        return tutoresSlots.map(a => ({ alumnosSlots: parameters.maxAlumnosPorGrupo, tutoresSlots: a }));
+    };
+
+    const calculateGrupos = (individual: [number[], number[], Slot[]], alumnos: Alumno[], tutores: Tutor[], parameters: OptimizationParameters): Grupo[] => {
 
         // const getGroups = (groupsN: number): { grupos: Grupo[], fitness: number } => {
 
-        //     interface Slot { almunosSlots: number, tutoresSlots: number }
+        //     interface Slot { alumnosSlots: number, tutoresSlots: number }
 
         //     const alumnoFitness = (alumno: Alumno, grupo: Grupo): number => {
         //         const idTutoresGrupo = grupo.tutores.map(x => x.id);
@@ -353,7 +387,7 @@ self.onmessage = (e) => {
         //         let updatedPotentialGroup = null;
 
         //         for (let i = 0; i < grupos.length; i++) {
-        //             if (grupos[i].alumnos.length < slots[i].almunosSlots) {
+        //             if (grupos[i].alumnos.length < slots[i].alumnosSlots) {
         //                 const potentialGroup = getPotentialGroup(grupos[i], slots[i]);
         //                 const grupoFitness = alumnoFitness(alumno, potentialGroup);
         //                 if (grupoFitness > bestFitness) {
@@ -382,9 +416,9 @@ self.onmessage = (e) => {
 
         //     const slots: Slot[] = [];
         //     for (let i = 0; i < groupsN; i++) {
-        //         let almunosSlots = Math.floor(alumnos.length / groupsN + (alumnos.length % groupsN > i ? 1 : 0));
+        //         let alumnosSlots = Math.floor(alumnos.length / groupsN + (alumnos.length % groupsN > i ? 1 : 0));
         //         let tutoresSlots = Math.floor(tutores.length / groupsN + (tutores.length % groupsN > i ? 1 : 0));
-        //         slots.push({ almunosSlots, tutoresSlots })
+        //         slots.push({ alumnosSlots, tutoresSlots })
         //     }
 
         //     const grupos = individual.reduce((grupos, alumnoId) => {
@@ -408,9 +442,9 @@ self.onmessage = (e) => {
         //     return { grupos, fitness }
         // };
 
-        const getGroupsDummy = (groupsN: number): { grupos: Grupo[], fitness: number } => {
+        const getGroupsDummy = (individual: [number[], number[], Slot[]], alumnos: Alumno[], tutores: Tutor[], parameters: OptimizationParameters): Grupo[] => {
 
-            interface Slot { almunosSlots: number, tutoresSlots: number }
+            const [alumnosIds, _tutoresIds, slots] = individual;
 
             const alumnoFitness = (alumno: Alumno, grupo: Grupo): number => {
                 const idTutoresGrupo = grupo.tutores.map(x => x.id);
@@ -423,14 +457,7 @@ self.onmessage = (e) => {
                 }, 0);
             };
 
-            const slots: Slot[] = [];
-            for (let i = 0; i < groupsN; i++) {
-                let almunosSlots = Math.floor(alumnos.length / groupsN + (alumnos.length % groupsN > i ? 1 : 0));
-                let tutoresSlots = Math.floor(tutores.length / groupsN + (tutores.length % groupsN > i ? 1 : 0));
-                slots.push({ almunosSlots, tutoresSlots })
-            }
-
-            const gruposIniciales = tutores.reduce((p, t) => {
+            const gruposInicialesTutores = tutores.reduce((p, t) => {
                 let grupo = p.find((g, i) => g.tutores.length < slots[i].tutoresSlots);
                 if (grupo) {
                     grupo?.tutores?.push(t);
@@ -440,58 +467,79 @@ self.onmessage = (e) => {
                 return p;
             }, [] as Grupo[])
 
-            const grupos = individual[1].reduce((grupos, alumnoId) => {
-                let alumno = alumnos.find(x => x.id === alumnoId) as Alumno;
-                let target = grupos
-                    .filter((g, i) => g.alumnos.length < slots[i].almunosSlots)
-                    .sort((a, b) => alumnoFitness(alumno, b) - alumnoFitness(alumno, a))[0]
+            const grupos = alumnosIds.filter(x => x).reduce((grupos, alumnoId) => {
+                if (alumnoId === -1) {
+                    console.log({ grupos, alumnoId, individual, alumnos, tutores, parameters })
+                    throw Error("AlumnoId is -1!")
+                }
+                const alumno = alumnos.find(x => x.id === alumnoId);
 
-                target?.alumnos?.push(alumno);
+                const remainingTutores = alumno?.tutores
+                    .filter(tutor => {
+                        const tutorId = tutor.id;
+                        let grupoTutor = grupos.find(g => g.tutores.find(t => t.id === tutorId));
+                        return !(grupoTutor && grupoTutor.alumnos.find(x => x.id === alumnoId));
+                    })
+
+                if (remainingTutores && remainingTutores?.length > 0) {
+                    let target = grupos
+                        .filter((g, i) =>
+                            g.alumnos.length < slots[i].alumnosSlots &&
+                            alumnoFitness({ ...alumno as Alumno, tutores: remainingTutores as Tutor[] }, g) > 0
+                        )
+                        .sort((a, b) =>
+                            alumnoFitness({ ...alumno as Alumno, tutores: remainingTutores as Tutor[] }, b) -
+                            alumnoFitness({ ...alumno as Alumno, tutores: remainingTutores as Tutor[] }, a))[0]
+
+                    if (target?.alumnos != null &&
+                        !grupos.find(grupo => grupo.alumnos.findIndex(a => a.id === alumnoId) === target.alumnos.length)) {
+                        target.alumnos.push(alumno as Alumno);
+                    }
+                }
+
                 return grupos;
-            }, gruposIniciales);
+            }, gruposInicialesTutores);
 
-            const fitness = calculateFitness(grupos, alumnos, parameters);
-
-            return { grupos, fitness }
+            return grupos;
         };
 
-        const minGroups = Math.max(parameters.minCantidadGrupos, Math.ceil(tutores.length / parameters.maxTutoresPorGrupo), Math.ceil(alumnos.length / parameters.maxAlumnosPorGrupo));
-        const maxGroups = Math.min(parameters.maxCantidadGrupos, Math.floor(tutores.length / parameters.minTutoresPorGrupo), Math.floor(alumnos.length / parameters.minAlumnosPorGrupo));
-        if (maxGroups < minGroups) throw new Error("Restricciones incompatibles!");
-
-        const posibleResults = [];
-        for (let i = minGroups; i <= maxGroups; i++) {
-            posibleResults.push(getGroupsDummy(i));
-        }
-
-        return posibleResults.sort((a, b) => b.fitness - a.fitness)[0].grupos;
+        return getGroupsDummy(individual, alumnos, tutores, parameters);
     };
 
     const initHistory = (alumnos: Alumno[], tutores: Tutor[], parameters: OptimizationParameters, rng: Function): History => {
 
-        const alumnosIds = alumnos.map(x => x.id);
+        const alumnosIds = alumnos.map(x => Array(x.tutores.length).fill(null).map(_t => x.id)).flat();
+        const tutoresIds = tutores.map(x => x.id);
+
         const individuals: { [key: string]: Individual } = {};
 
         for (let i = 0; i < parameters.populationSize; i++) {
             let seed = Math.floor(rng() * 1000000);
             let individualAlumnosIds = shuffleArray(alumnosIds, seed);
             seed = Math.floor(rng() * 1000000);
-            let individualTutoresIds = shuffleArray(alumnosIds, seed);
-            let hash = hashArray(individualAlumnosIds.concat(individualTutoresIds));
+            let individualTutoresIds = shuffleArray(tutoresIds, seed);
+            seed = Math.floor(rng() * 1000000);
+            let slots = getSlots(parameters, alumnos, tutores, seed);
+
+            let hash = hashArray([...individualAlumnosIds, ...individualTutoresIds, ...slots.map(x => [x.alumnosSlots, x.tutoresSlots]).flat()]);
             let counter = 0;
 
             while (individuals[hash] != null) {
                 console.log('Duplicate individual found, reshuffling...');
                 seed = Math.floor(rng() * 1000000);
                 individualAlumnosIds = shuffleArray(alumnosIds, seed);
-                hash = hashArray(individualAlumnosIds);
+                seed = Math.floor(rng() * 1000000);
+                individualTutoresIds = shuffleArray(tutoresIds, seed);
+                seed = Math.floor(rng() * 1000000);
+                slots = getSlots(parameters, alumnos, tutores, seed);
+
+                hash = hashArray([...individualAlumnosIds, ...individualTutoresIds, ...slots.map(x => [x.alumnosSlots, x.tutoresSlots]).flat()]);
                 counter++;
                 if (counter > 100) {
-                    console.error('Too many attempts to find a unique individual');
-                    break;
+                    throw new Error('Too many attempts to find a unique individual');
                 }
             };
-            const grupos = calculateGrupos([individualAlumnosIds, tutores.map(t => t.id)], alumnos, tutores, parameters);
+            const grupos = calculateGrupos([individualAlumnosIds, tutores.map(t => t.id), slots], alumnos, tutores, parameters);
             const fitness = calculateFitness(grupos, alumnos, parameters);
 
             individuals[hash] = {
@@ -501,6 +549,7 @@ self.onmessage = (e) => {
                 extintGeneration: null,
                 alumnosIds: individualAlumnosIds,
                 tutoresIds: individualTutoresIds,
+                slots,
                 grupos,
                 fitness,
             };
@@ -556,7 +605,7 @@ self.onmessage = (e) => {
         let duplicateAttempts = 0;
 
         for (let i = 0; i < offspringNeeded; i++) {
-            let offspring: [number[], number[]] | null = null;
+            let offspring: [number[], number[], Slot[]] | null = null;
             let offspringHash: string | null = null;
             let attempts = 0;
             const maxAttempts = 100;
@@ -567,8 +616,8 @@ self.onmessage = (e) => {
                 const parentAHash = tournamentSelect(currentPopulation, history.individuals, parameters.tournamentSize, rng);
                 const parentBHash = tournamentSelect(currentPopulation, history.individuals, parameters.tournamentSize, rng);
 
-                const parentA = [history.individuals[parentAHash].alumnosIds, history.individuals[parentAHash].tutoresIds] as [number[], number[]];
-                const parentB = [history.individuals[parentBHash].alumnosIds, history.individuals[parentBHash].tutoresIds] as [number[], number[]];
+                const parentA = [history.individuals[parentAHash].alumnosIds, history.individuals[parentAHash].tutoresIds, history.individuals[parentAHash].slots] as [number[], number[], Slot[]];
+                const parentB = [history.individuals[parentBHash].alumnosIds, history.individuals[parentBHash].tutoresIds, history.individuals[parentAHash].slots] as [number[], number[], Slot[]];
 
                 // Crossover
                 if (rng() < parameters.crossoverRate) {
@@ -579,13 +628,14 @@ self.onmessage = (e) => {
 
                 // Mutation
                 if (rng() < parameters.mutationRate) {
-                    offspring = mutate(offspring, rng);
+                    offspring = mutate(parameters, alumnos, tutores, offspring, rng);
                 }
 
                 offspringHash = hashArray(offspring[0].concat(offspring[1]));
 
                 // Check for duplicates in both existing individuals and new generation
                 if (!history.individuals[offspringHash] && !generation.individuals.includes(offspringHash)) {
+
                     // New unique individual found
                     const grupos = calculateGrupos(offspring, alumnos, tutores, parameters);
                     const fitness = calculateFitness(grupos, alumnos, parameters);
@@ -597,6 +647,7 @@ self.onmessage = (e) => {
                         extintGeneration: null,
                         alumnosIds: offspring[0],
                         tutoresIds: offspring[1],
+                        slots: offspring[2],
                         grupos,
                         fitness
                     };
@@ -624,8 +675,8 @@ self.onmessage = (e) => {
             // use forced mutation to ensure uniqueness
             if (attempts >= maxAttempts) {
                 generation.shuffleRepeats++;
-                offspring = forcedUniqueIndividual(alumnos.map(a => a.id), tutores.map(t => t.id), history.individuals, generation.individuals, rng);
-                offspringHash = hashArray(offspring as [number[], number[]]);
+                offspring = forcedUniqueIndividual(parameters, alumnos, tutores, history.individuals, generation.individuals, rng);
+                offspringHash = hashArray([...offspring[0], ...offspring[1], ...offspring[2].map(x => [x.alumnosSlots, x.tutoresSlots]).flat()]);
 
                 const grupos = calculateGrupos(offspring, alumnos, tutores, parameters);
                 const fitness = calculateFitness(grupos, alumnos, parameters);
@@ -637,6 +688,7 @@ self.onmessage = (e) => {
                     extintGeneration: null,
                     alumnosIds: offspring[0],
                     tutoresIds: offspring[1],
+                    slots: offspring[2],
                     grupos,
                     fitness
                 };
@@ -694,78 +746,98 @@ self.onmessage = (e) => {
         );
     };
 
-    const crossover = (parentA: [number[], number[]], parentB: [number[], number[]], rng: Function): [number[], number[]] => {
+    const crossover = (parentA: [number[], number[], Slot[]], parentB: [number[], number[], Slot[]], rng: Function): [number[], number[], Slot[]] => {
         // Order crossover (OX) - good for permutations
         const alumnosSize = parentA[0].length;
         const alumnosStart = Math.floor(rng() * alumnosSize);
         const alumnosEnd = Math.floor(rng() * (alumnosSize - alumnosStart)) + alumnosStart;
 
-        const tutoresSize = parentA[0].length;
+        const tutoresSize = parentA[1].length;
         const tutoresStart = Math.floor(rng() * tutoresSize);
         const tutoresEnd = Math.floor(rng() * (tutoresSize - tutoresStart)) + tutoresStart;
 
-        const offspring = [new Array(alumnosSize).fill(-1), new Array(tutoresSize).fill(-1)] as [number[], number[]];
+        const slotsSize = parentA[2].length;
+        const slotsStart = Math.floor(rng() * slotsSize);
+        const slotsEnd = Math.floor(rng() * (slotsSize - slotsStart)) + slotsStart;
+
+        const offspring = [
+            new Array(alumnosSize).fill(-1),
+            new Array(tutoresSize).fill(-1),
+            new Array(slotsSize).fill({ alumnosSlots: -1, tutoresSlots: -1 })] as [number[], number[], Slot[]
+            ];
 
         // Copy segment from parentA
-        for (let i = alumnosStart; i <= alumnosEnd; i++) {
-            offspring[0][i] = parentA[0][i];
-        }
-        for (let i = tutoresStart; i <= tutoresEnd; i++) {
-            offspring[1][i] = parentA[1][i];
+        for (let i = 0; i <= alumnosSize; i++) {
+            if (i > alumnosStart && i < alumnosEnd)
+                offspring[0][i] = parentA[0][i];
+            else
+                offspring[0][i] = parentB[0][i];
         }
 
+        for (let i = 0; i <= tutoresSize; i++) {
+            if (i > tutoresStart && i < tutoresEnd)
+                offspring[1][i] = parentA[1][i];
+            else
+                offspring[1][i] = parentB[1][i];
+        }
+
+        for (let i = slotsStart; i <= slotsEnd; i++) {
+            offspring[2][i] = parentA[2][i];
+        }
+
+        //console.log({ alumnosSize, alumnosStart, alumnosEnd, parentA, parentB })
         // Fill remaining positions from parentB
         let currentPos = 0;
-        for (let i = 0; i < alumnosSize; i++) {
-            if (!offspring[0].includes(parentB[0][i])) {
-                while (offspring[0][currentPos] !== -1) {
+        for (let i = 0; i < slotsSize; i++) {
+            if (!offspring[2].includes(parentB[2][i])) {
+                while (offspring[2][currentPos].alumnosSlots !== -1 ||
+                    offspring[2][currentPos].tutoresSlots !== -1
+                ) {
                     currentPos++;
                 }
-                offspring[0][currentPos] = parentB[0][i];
-            }
-        }
-        currentPos = 0;
-        for (let i = 0; i < tutoresSize; i++) {
-            if (!offspring[1].includes(parentB[1][i])) {
-                while (offspring[1][currentPos] !== -1) {
-                    currentPos++;
-                }
-                offspring[1][currentPos] = parentB[1][i];
+                offspring[2][currentPos] = parentB[2][i];
             }
         }
 
         return offspring;
     };
 
-    const mutate = (individual: [number[], number[]], rng: Function): [number[], number[]] => {
-        const mutated = [[...individual[0]], [...individual[1]]] as [number[], number[]];
+    const mutate = (parameters: OptimizationParameters, alumnos: Alumno[], tutores: Tutor[], individual: [number[], number[], Slot[]], rng: Function): [number[], number[], Slot[]] => {
+
+        const rnd = rng();
+        const mutated = [[...individual[0]], [...individual[1]], [...individual[2]]] as [number[], number[], Slot[]];
 
         // Swap mutation
-        if (rng() > 0.5) {
+        if (rnd < 1 / 3) {
             const pos1 = Math.floor(rng() * mutated[0].length);
             const pos2 = Math.floor(rng() * mutated[0].length);
             [mutated[0][pos1], mutated[0][pos2]] = [mutated[0][pos2], mutated[0][pos1]];
-        } else {
+        } else if (rnd < 2 / 3) {
             const pos1 = Math.floor(rng() * mutated[1].length);
             const pos2 = Math.floor(rng() * mutated[1].length);
             [mutated[1][pos1], mutated[1][pos2]] = [mutated[1][pos2], mutated[1][pos1]];
+        } else {
+            mutated[2] = getSlots(parameters, alumnos, tutores, rng());
         }
 
 
         return mutated;
     };
 
-    const forcedUniqueIndividual = (alumnosIds: number[], tutoresIds: number[], existingIndividuals: { [key: string]: Individual }, newGeneration: string[], rng: Function): [number[], number[]] => {
-        let individual: [number[], number[]];
-        let hash: string;
+    const forcedUniqueIndividual = (parameters: OptimizationParameters, alumnos: Alumno[], tutores: Tutor[], existingIndividuals: { [key: string]: Individual }, newGeneration: string[], rng: Function): [number[], number[], Slot[]] => {
 
+        let individual: [number[], number[], Slot[]];
+        let hash: string;
+        const alumnosIds = alumnos.map(x => Array(x.tutores.length).fill(null).map(_t => x.id)).flat();
+        const tutoresIds = tutores.map(x => x.id);
         // Keep shuffling until we get a unique one
         do {
             individual = [
                 shuffleArray(alumnosIds, Math.floor(rng() * 1000000000)),
-                shuffleArray(tutoresIds, Math.floor(rng() * 1000000000))
+                shuffleArray(tutoresIds, Math.floor(rng() * 1000000000)),
+                getSlots(parameters, alumnos, tutores, Math.floor(rng() * 1000000000))
             ];
-            hash = hashArray(individual);
+            hash = hashArray([...individual[0], ...individual[1], ...individual[2].map(x => [x.alumnosSlots, x.tutoresSlots]).flat()]);
         } while (existingIndividuals[hash] || newGeneration.includes(hash));
 
         return individual;

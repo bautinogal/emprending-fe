@@ -15,6 +15,7 @@ interface OptimizationParameters {
     tournamentSize: number; // < n / 2 //  2-3 for exploration, 4-5 for exploitation
     elitismCount: number; // 0 - 1 // 2-5% of population size
 
+
     // Assignment parameters
     minCantidadGrupos: number;
     maxCantidadGrupos: number;
@@ -24,6 +25,9 @@ interface OptimizationParameters {
     maxTutoresPorGrupo: number;
     similarityThreshold: number;
     pesoRelativoTutores: number[];
+    inequalityAversion: number; // 1 - 3 // 1 is linear, bigger value tend to favor middle values
+    maxGroupsPerStudent: number;
+    slotsAreTimeFrames: boolean;
 }
 
 interface Tutor { nombre: string, apellido: string, email: string, id: number }
@@ -43,7 +47,6 @@ interface Individual {
     grupos: Grupo[];
     fitness: number;
 };
-
 interface Generation {
     i: number;
     inititialTime: number;
@@ -209,6 +212,8 @@ const calculateSimilarity = (str1: string, str2: string): number => {
 console.log('Worker script loaded successfully!');
 
 self.onmessage = (e) => {
+
+
     console.log('Worker received message from main thread:', !!e.data);
 
     const prepareData = (alumnosData: AlumnoData[], tutoresData: TutorData[], parameters: OptimizationParameters): { alumnos: Alumno[], tutores: Tutor[], warnings: Warnings } => {
@@ -276,25 +281,37 @@ self.onmessage = (e) => {
     };
 
     const calculateFitness = (grupos: Grupo[], _alumnos: Alumno[], parameters: OptimizationParameters): number => {
+
+        const curvedValue = (() => {
+            const n = parameters.inequalityAversion + 1;
+            const a = 0.5 * n - 0.5;
+            const f = (x: number) => (1 + a) * (1 - Math.pow((1 - x), n)) - a;
+            return (x: number, maxValue: number): number => 0 + (maxValue - 0) * f(x);
+        })();
+
         let fitness = 0;
-        let penalty = 0;
 
         grupos.forEach(grupo => {
             // Calculate positive fitness from matches
             const idTutoresGrupo = grupo.tutores.map(t => t.id);
             fitness += grupo.alumnos.reduce((pr, alumno) => {
                 const idTutoresPreferidos = alumno.tutores.map(t => t.id);
-                return pr + idTutoresPreferidos.reduce((pre, tutorPref, i) => {
+                const maxAlumnoScore = idTutoresPreferidos.reduce((p, x, i) => p + alumno.value * parameters.pesoRelativoTutores[i], 0);
+                const linearScore = idTutoresPreferidos.reduce((pre, tutorPref, i) => {
                     if (idTutoresGrupo.includes(tutorPref)) {
                         pre = pre + alumno.value * parameters.pesoRelativoTutores[i];
                     }
                     return pre;
                 }, 0);
+
+                const curvedScore = curvedValue(linearScore / maxAlumnoScore, maxAlumnoScore);
+                return pr + curvedScore;
+
             }, 0);
         });
 
         // Return fitness minus penalties (penalties reduce fitness)
-        return Math.max(0, fitness - penalty);
+        return Math.max(0, fitness);
     };
 
     const calculateGrupos = (individual: [number[], number[]], alumnos: Alumno[], tutores: Tutor[], parameters: OptimizationParameters): Grupo[] => {
@@ -800,13 +817,21 @@ self.onmessage = (e) => {
         console.log('Total duration:', ((history.endTime - history.inititialTime) / 1000.000).toFixed(3), 'seconds');
         console.log('Optimization process finished:', { history, currentBestScore, perfectFitness, maxTeoricalFitness });
         console.log('Best individuals:', Object.entries(history.individuals).sort((a, b) => (b[1].fitness || 0) - (a[1].fitness || 0)).map(x => x[1]));
+        const combinationsN = Object.keys(history.individuals).length;
+        const geneticSummary = Object.values(history.generations).map((x, i) => ({
+            inititialTime: x.inititialTime,
+            endTime: x.endTime,
+            shuffleRepeats: x.shuffleRepeats,
+            bestFitness: x.bestFitness,
+            worstFitness: x.worstFitness,
+            averageFitness: x.averageFitness,
+        }))
 
+        const { inititialTime, endTime, champion, worst } = history
         self.postMessage({
             type: "finish",
             payload: {
-                warnings,
-                history,
-                parameters,
+                combinationsN, warnings, inititialTime, endTime, champion, worst, parameters, geneticSummary
             }
         });
     } catch (error) {

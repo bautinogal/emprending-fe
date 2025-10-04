@@ -3,7 +3,7 @@ import { useSelector, useDispatch } from 'react-redux'
 import './App.css'
 
 import * as React from 'react';
-import { Box, Button, Divider, Drawer, TextField, IconButton, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Tab, Tabs, Typography, Modal, LinearProgress } from '@mui/material';
+import { Box, Button, Checkbox, Divider, Drawer, TextField, IconButton, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Tab, Tabs, Typography, Modal, LinearProgress } from '@mui/material';
 import { ChevronLeft as ChevronLeftIcon, Download as DownloadIcon, Groups as GroupsIcon, School as SchoolIcon, UploadFile as UploadFileIcon } from '@mui/icons-material';
 import { DataGrid, type GridColDef } from '@mui/x-data-grid';
 import type { RootState, AppDispatch } from './store/store';
@@ -35,6 +35,10 @@ interface OptimizationParameters {
   maxTutoresPorGrupo: number;
   similarityThreshold: number;
   pesoRelativoTutores: number[];
+
+  inequalityAversion: number; // 1 - 3 // 1 is linear, bigger value tend to favor middle values
+  maxGroupsPerStudent: number;
+  slotsAreTimeFrames: boolean;
 }
 
 interface Tutor { nombre: string, apellido: string, email: string, id: number }
@@ -78,23 +82,24 @@ interface Generation {
   worstFitness: number;
   averageFitness: number;
 };
-interface History {
-  inititialTime: number;
-  endTime: number | null;
-
-  champion: Individual;
-  worst: Individual;
-  individuals: { [key: string]: Individual };
-  populationZero: string[];
-  generations: Generation[];
-};
 
 interface Result {
   warnings: Warnings;
-  history: History;
+  geneticSummary: {
+    inititialTime: number,
+    endTime: number,
+    shuffleRepeats: number,
+    bestFitness: number,
+    worstFitness: number,
+    averageFitness: number,
+  }[],
+  combinationsN: number,
+  inititialTime: number,
+  endTime: number,
+  champion: Individual,
+  worst: Individual,
   parameters: OptimizationParameters
-}
-
+};
 
 const CustomTabPanel = (props: { children?: React.ReactNode; index: string; value: string; }) => {
   const { children, value, index, ...other } = props;
@@ -587,13 +592,43 @@ const Maraton = () => {
         </Box>
       };
 
+      const AberracionInjusticia = () => {
+        const inequalityAversion = useSelector((state: RootState) => state.app.parameters.inequalityAversion);
+        return <Box sx={{ alignItems: 'center', gap: 2, paddingTop: "0rem" }}>
+          <Typography variant="body1" sx={{ mb: 1 }}>
+            Aberración a la injusticia: {inequalityAversion.toFixed(2)}
+          </Typography>
+          <input type="range" min="0" max="9" step={0.1}
+            value={Math.pow(inequalityAversion, 2)}
+            onChange={(e) => dispatch(setParameters({ inequalityAversion: Math.pow(Number(e.target.value), 1 / 2) }))}
+            style={{ width: '300px', cursor: 'pointer' }}
+          />
+        </Box>
+      };
+
+      const Horarios = () => {
+        const slotsAreTimeFrames = useSelector((state: RootState) => state.app.parameters.slotsAreTimeFrames);
+        return <Box sx={{ alignItems: 'center', gap: 2, paddingTop: "0rem", display: "flex" }}>
+          <Typography variant="body1">
+            Horarios
+          </Typography>
+          <Checkbox
+            value={slotsAreTimeFrames}
+            onChange={(e) => dispatch(setParameters({
+              slotsAreTimeFrames: Boolean(e.target.value),
+              maxGroupsPerStudent: Boolean(e.target.value) ? 5 : 1
+            }))}
+          />
+        </Box>
+      };
+
       const SensibilidadCoincidencia = () => {
         const similarityThreshold = useSelector((state: RootState) => state.app.parameters.similarityThreshold);
         return <Box sx={{ alignItems: 'center', gap: 2, paddingTop: "0rem" }}>
           <Typography variant="body1" sx={{ mb: 1 }}>
             Sensibilidad de coincidencia de nombres: {(similarityThreshold * 100).toFixed(0)}%
           </Typography>
-          <Typography variant="caption">Flexible</Typography>
+          {/* <Typography variant="caption">Flexible</Typography> */}
           <input
             type="range"
             min="0"
@@ -602,12 +637,12 @@ const Maraton = () => {
             onChange={(e) => dispatch(setParameters({ similarityThreshold: Number(e.target.value) / 100 }))}
             style={{ width: '300px', cursor: 'pointer' }}
           />
-          <Typography variant="caption">Estricto</Typography>
-          <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
-            0% = Acepta variaciones (acentos, abreviaciones) | 100% = Solo coincidencias exactas 
-          </Typography>
+          {/* <Typography variant="caption">Estricto</Typography> */}
+          {/* <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 1 }}>
+            0% = Acepta variaciones (acentos, abreviaciones) | 100% = Solo coincidencias exactas
+          </Typography> */}
         </Box>
-      }
+      };
 
       return <>
         <ErrorModal />
@@ -632,6 +667,8 @@ const Maraton = () => {
             <Typography variant="body1" sx={{ mb: 1 }} children={"Peso Relativo Tutores"} />
             <PesoRelativoTutores />
           </Box>
+          <Horarios />
+          <AberracionInjusticia />
           < SensibilidadCoincidencia />
         </Box>
       </>
@@ -755,7 +792,7 @@ const Maraton = () => {
     };
 
     // If no result, show loading message
-    if (!result || !result.history) {
+    if (!result) {
       return (
         <Box sx={{ p: 3 }}>
           <Typography variant="h5" fontWeight={600} sx={{ mb: 2 }}>
@@ -769,7 +806,7 @@ const Maraton = () => {
     }
 
     // Extract data from result
-    const champion = result.history.champion;
+    const champion = result.champion;
     const grupos = champion.grupos || [];
     const totalAlumnos = champion.alumnosIds ? champion.alumnosIds.length : 0;
     const alumnosAsignados = grupos.reduce((sum: number, grupo: Grupo) =>
@@ -852,7 +889,38 @@ const Maraton = () => {
             </Box>
             <Box>
               <Typography variant="caption" color="text.secondary">Asignados</Typography>
-              <Typography variant="h6" color="success.main">{alumnosAsignados}</Typography>
+              <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexWrap: 'wrap' }}>
+                {(() => {
+                  // Calculate score ranges using the same logic as the individual student display
+                  const scoreRanges = { high: 0, medium: 0, low: 0, veryLow: 0 };
+
+                  grupos.forEach((grupo: Grupo) => {
+                    const tutoresIds = grupo.tutores.map(x => x.id);
+                    grupo.alumnos.forEach((alumno: Alumno) => {
+                      const score = alumno.tutores.reduce((sum, _, idx) =>
+                        sum + (tutoresIds.includes(alumno.tutores[idx].id) ? (pesoRelativoTutores[idx] || 0) : 0), 0);
+                      const maxScore = alumno.tutores.reduce((sum, _, idx) =>
+                        sum + (pesoRelativoTutores[idx] || 0), 0);
+
+                      const percentage = maxScore > 0 ? (score / maxScore) : 0;
+
+                      if (percentage >= 0.75) scoreRanges.high++;
+                      else if (percentage >= 0.5) scoreRanges.medium++;
+                      else if (percentage >= 0.25) scoreRanges.low++;
+                      else scoreRanges.veryLow++;
+                    });
+                  });
+
+                  return (
+                    <>
+                      {scoreRanges.high > 0 && <Typography variant="h6" marginRight={'1rem'} fontWeight={600} color='success.main' children={scoreRanges.high} />}
+                      {scoreRanges.medium > 0 && <Typography variant="h6" marginRight={'1rem'} fontWeight={600} color='#FFC107' children={scoreRanges.medium} />}
+                      {scoreRanges.low > 0 && <Typography variant="h6" marginRight={'1rem'} fontWeight={600} color='warning.main' children={scoreRanges.low} />}
+                      {scoreRanges.veryLow > 0 && <Typography variant="h6" marginRight={'1rem'} fontWeight={600} color='error.main' children={scoreRanges.veryLow} />}
+                    </>
+                  );
+                })()}
+              </Box>
             </Box>
             <Box>
               <Typography variant="caption" color="text.secondary">Sin Asignar</Typography>
@@ -882,7 +950,7 @@ const Maraton = () => {
             <Box>
               <Typography variant="caption" color="text.secondary">Iteraciones</Typography>
               <Typography variant="h6">
-                {result.history.generations ? result.history.generations.length : 0}
+                {result?.geneticSummary?.length || 0}
               </Typography>
             </Box>
           </Box>
@@ -952,11 +1020,11 @@ const Maraton = () => {
                             borderRadius: 0.5,
                             fontWeight: 600,
                             bgcolor: warning.score >= 0.75 ? '#4caf5020' :
-                                     warning.score >= 0.5 ? '#ff980020' :
-                                     '#f4433620',
+                              warning.score >= 0.5 ? '#ff980020' :
+                                '#f4433620',
                             color: warning.score >= 0.75 ? 'success.main' :
-                                   warning.score >= 0.5 ? 'warning.main' :
-                                   'error.main'
+                              warning.score >= 0.5 ? 'warning.main' :
+                                'error.main'
                           }}
                         >
                           {(warning.score * 100).toFixed(0)}% coincidencia
@@ -1017,7 +1085,7 @@ const Maraton = () => {
             </Box>
             <Box id="groups-content" sx={{ p: 2, pt: 0, display: 'block' }} >
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 2 }}>
-                {result.history.champion.grupos.map((grupo, i) => {
+                {result.champion.grupos.map((grupo, i) => {
                   const alumnos = grupo.alumnos || [];
                   return (<Box key={alumnos.map(x => x.nombre + ' ' + x.apellido).join(',')} sx={{ p: 2, border: '1px solid', borderColor: 'divider', borderRadius: 1, bgcolor: 'background.paper' }}>
                     <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'space-between', alignItems: 'start', mb: 1 }}>
@@ -1107,7 +1175,7 @@ const Maraton = () => {
                   <Typography variant="body2" fontWeight={600}>% Satisfacción</Typography>
                   <Typography variant="body2" fontWeight={600}>Tutores</Typography>
                 </Box>
-                {result.history.champion.grupos.map((group: Grupo, i) => {
+                {result.champion.grupos.map((group: Grupo, i) => {
                   const tutoresIds = group.tutores.map(x => x.id);
                   return group.alumnos.map((alumno: Alumno) => {
                     return {
@@ -1356,7 +1424,7 @@ const Maraton = () => {
               }}
             >
               <Typography variant="h6">
-                🧬 Evolución del Algoritmo Genético ({result.history.generations ? result.history.generations.length : 0} generaciones)
+                🧬 Evolución del Algoritmo Genético ({result?.geneticSummary?.length || 0} generaciones)
               </Typography>
               <Typography
                 id="evolution-arrow"
@@ -1377,13 +1445,13 @@ const Maraton = () => {
                 display: 'none'
               }}
             >
-              {result.history.generations && result.history.generations.length > 0 && (
+              {result?.geneticSummary?.length > 0 && (
                 <Box sx={{ mt: 2 }}>
                   {/* Summary Stats */}
                   <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 2, mb: 3 }}>
                     <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'primary.light', color: 'primary.contrastText', borderRadius: 1 }}>
                       <Typography variant="h6" fontWeight={600}>
-                        {result.history.generations.length}
+                        {result?.geneticSummary?.length}
                       </Typography>
                       <Typography variant="caption">
                         Generaciones
@@ -1399,7 +1467,7 @@ const Maraton = () => {
                     </Box>
                     <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'info.light', color: 'info.contrastText', borderRadius: 1 }}>
                       <Typography variant="h6" fontWeight={600}>
-                        {result.history.endTime ? ((result.history.endTime - result.history.inititialTime) / 1000).toFixed(1) : '0.0'}s
+                        {result.endTime ? ((result.endTime - result.inititialTime) / 1000).toFixed(1) : '0.0'}s
                       </Typography>
                       <Typography variant="caption">
                         Duración
@@ -1407,7 +1475,7 @@ const Maraton = () => {
                     </Box>
                     <Box sx={{ textAlign: 'center', p: 2, bgcolor: 'warning.light', color: 'warning.contrastText', borderRadius: 1 }}>
                       <Typography variant="h6" fontWeight={600}>
-                        {Object.keys(result.history.individuals).length}
+                        {result.combinationsN}
                       </Typography>
                       <Typography variant="caption">
                         Combinaciones
@@ -1426,102 +1494,117 @@ const Maraton = () => {
                       borderRadius: 1,
                       p: 2,
                       bgcolor: 'background.paper',
-                      position: 'relative',
-                      height: 200,
-                      overflow: 'hidden'
+                      height: 500,
                     }}>
                       {(() => {
+                        const perfectFitness = useSelector((state: RootState) => state.app.perfectFitness) as number;
+                        const maxTeoricalFitness = useSelector((state: RootState) => state.app.maxTeoricalFitness) as number;
                         // Generate fitness data for visualization
-                        const generations = result.history.generations;
-                        const maxFitness = Math.max(...generations.map(g => g.bestFitness));
-                        const minFitness = Math.min(...generations.map(g => g.worstFitness));
+                        const generations = result.geneticSummary;
+                        const maxFitness = Math.max(result.champion.fitness, perfectFitness);
+                        const minFitness = result.worst.fitness;
                         const range = maxFitness - minFitness || 1;
-
                         return (
-                          <Box sx={{ position: 'relative', height: '100%' }}>
+                          <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                             {/* Chart area */}
-                            <svg width="100%" height="100%" viewBox="0 0 600 180">
-                              {/* Grid lines */}
-                              {[0, 25, 50, 75, 100].map(y => (
-                                <line
-                                  key={y}
-                                  x1="50"
-                                  y1={30 + (y * 120 / 100)}
-                                  x2="580"
-                                  y2={30 + (y * 120 / 100)}
-                                  stroke="#e0e0e0"
-                                  strokeWidth="1"
+                            <Box sx={{ flex: 1, minHeight: 0 }}>
+                              <svg width="100%" height="100%" preserveAspectRatio="none" viewBox="0 0 1000 300">
+                                {/* Grid lines */}
+                                {[0, 25, 50, 75, 100].map(y => (
+                                  <line
+                                    key={y}
+                                    x1="60"
+                                    y1={20 + (y * 260 / 100)}
+                                    x2="980"
+                                    y2={20 + (y * 260 / 100)}
+                                    stroke="#e0e0e0"
+                                    strokeWidth="1"
+                                  />
+                                ))}
+
+                                {/* Max Teorical fitness line - only show if within range */}
+                                {maxTeoricalFitness >= minFitness && maxTeoricalFitness <= maxFitness && (
+                                  <line
+                                    x1="60"
+                                    y1={280 - ((maxTeoricalFitness - minFitness) / range * 260)}
+                                    x2="980"
+                                    y2={280 - ((maxTeoricalFitness - minFitness) / range * 260)}
+                                    stroke="#2196f3"
+                                    strokeWidth="2"
+                                    strokeDasharray="12,6"
+                                  />
+                                )}
+
+                                {/* Best fitness line */}
+                                <polyline
+                                  fill="none"
+                                  stroke="#4caf50"
+                                  strokeWidth="3"
+                                  points={generations.map((gen, i) => {
+                                    const x = 60 + (i * 920 / (generations.length - 1 || 1));
+                                    const y = 280 - ((gen.bestFitness - minFitness) / range * 260);
+                                    return `${x},${y}`;
+                                  }).join(' ')}
                                 />
-                              ))}
 
-                              {/* Best fitness line */}
-                              <polyline
-                                fill="none"
-                                stroke="#4caf50"
-                                strokeWidth="2"
-                                points={generations.map((gen, i) => {
-                                  const x = 50 + (i * 530 / (generations.length - 1 || 1));
-                                  const y = 150 - ((gen.bestFitness - minFitness) / range * 120);
-                                  return `${x},${y}`;
-                                }).join(' ')}
-                              />
+                                {/* Average fitness line */}
+                                <polyline
+                                  fill="none"
+                                  stroke="#ff9800"
+                                  strokeWidth="3"
+                                  points={generations.map((gen, i) => {
+                                    const x = 60 + (i * 920 / (generations.length - 1 || 1));
+                                    const y = 280 - ((gen.averageFitness - minFitness) / range * 260);
+                                    return `${x},${y}`;
+                                  }).join(' ')}
+                                />
 
-                              {/* Average fitness line */}
-                              <polyline
-                                fill="none"
-                                stroke="#ff9800"
-                                strokeWidth="2"
-                                points={generations.map((gen, i) => {
-                                  const x = 50 + (i * 530 / (generations.length - 1 || 1));
-                                  const y = 150 - ((gen.averageFitness - minFitness) / range * 120);
-                                  return `${x},${y}`;
-                                }).join(' ')}
-                              />
+                                {/* Worst fitness line */}
+                                <polyline
+                                  fill="none"
+                                  stroke="#f44336"
+                                  strokeWidth="3"
+                                  points={generations.map((gen, i) => {
+                                    const x = 60 + (i * 920 / (generations.length - 1 || 1));
+                                    const y = 280 - ((gen.worstFitness - minFitness) / range * 260);
+                                    return `${x},${y}`;
+                                  }).join(' ')}
+                                />
 
-                              {/* Worst fitness line */}
-                              <polyline
-                                fill="none"
-                                stroke="#f44336"
-                                strokeWidth="2"
-                                points={generations.map((gen, i) => {
-                                  const x = 50 + (i * 530 / (generations.length - 1 || 1));
-                                  const y = 150 - ((gen.worstFitness - minFitness) / range * 120);
-                                  return `${x},${y}`;
-                                }).join(' ')}
-                              />
+                                {/* Y-axis labels */}
+                                <text x="50" y="25" textAnchor="end" fontSize="12" fill="#666">{(maxFitness / perfectFitness * 100).toFixed(1)}%</text>
+                                <text x="50" y="155" textAnchor="end" fontSize="12" fill="#666">{((minFitness + range / 2) / perfectFitness * 100).toFixed(1)}%</text>
+                                <text x="50" y="285" textAnchor="end" fontSize="12" fill="#666">{(minFitness / perfectFitness * 100).toFixed(1)}%</text>
 
-                              {/* Y-axis labels */}
-                              <text x="40" y="35" textAnchor="end" fontSize="10" fill="#666">{maxFitness.toFixed(1)}</text>
-                              <text x="40" y="95" textAnchor="end" fontSize="10" fill="#666">{(minFitness + range / 2).toFixed(1)}</text>
-                              <text x="40" y="155" textAnchor="end" fontSize="10" fill="#666">{minFitness.toFixed(1)}</text>
-
-                              {/* X-axis labels */}
-                              <text x="50" y="170" textAnchor="middle" fontSize="10" fill="#666">0</text>
-                              <text x="580" y="170" textAnchor="middle" fontSize="10" fill="#666">{generations.length}</text>
-                            </svg>
+                                {/* X-axis labels */}
+                                <text x="60" y="298" textAnchor="start" fontSize="12" fill="#666">0</text>
+                                <text x="980" y="298" textAnchor="end" fontSize="12" fill="#666">{generations.length}</text>
+                              </svg>
+                            </Box>
 
                             {/* Legend */}
                             <Box sx={{
-                              position: 'absolute',
-                              top: 8,
-                              right: 8,
                               display: 'flex',
-                              gap: 2,
-                              bgcolor: 'rgba(255,255,255,0.9)',
-                              p: 1,
-                              borderRadius: 0.5
+                              justifyContent: 'center',
+                              gap: 3,
+                              pt: 2,
+                              mt: 'auto'
                             }}>
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                <Box sx={{ width: 12, height: 2, bgcolor: '#4caf50' }} />
-                                <Typography variant="caption">Mejor</Typography>
+                                <Box sx={{ width: 20, height: 3, bgcolor: '#4caf50' }} />
+                                <Typography variant="body2">Mejor</Typography>
                               </Box>
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                <Box sx={{ width: 12, height: 2, bgcolor: '#ff9800' }} />
-                                <Typography variant="caption">Promedio</Typography>
+                                <Box sx={{ width: 20, height: 3, bgcolor: '#ff9800' }} />
+                                <Typography variant="body2">Promedio</Typography>
                               </Box>
                               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                                <Box sx={{ width: 12, height: 2, bgcolor: '#f44336' }} />
-                                <Typography variant="caption">Peor</Typography>
+                                <Box sx={{ width: 20, height: 3, bgcolor: '#f44336' }} />
+                                <Typography variant="body2">Peor</Typography>
+                              </Box>
+                              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                                <Box sx={{ width: 20, height: 2, bgcolor: '#2196f3', borderTop: '2px dashed #2196f3' }} />
+                                <Typography variant="body2">Perfecto</Typography>
                               </Box>
                             </Box>
                           </Box>

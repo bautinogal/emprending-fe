@@ -26,6 +26,9 @@ interface OptimizationParameters {
   maxTutoresPorGrupo: number;
   similarityThreshold: number;
   pesoRelativoTutores: number[];
+  inequalityAversion: number; // 1 - 3 // 1 is linear, bigger value tend to favor middle values
+  maxGroupsPerStudent: number;
+  slotsAreTimeFrames: boolean;
 }
 
 interface Tutor { nombre: string, apellido: string, email: string, id: number }
@@ -82,7 +85,19 @@ interface History {
 
 interface Result {
   warnings: Warnings;
-  history: History;
+  geneticSummary: {
+    inititialTime: number,
+    endTime: number,
+    shuffleRepeats: number,
+    bestFitness: number,
+    worstFitness: number,
+    averageFitness: number,
+  }[],
+  combinationsN: number,
+  inititialTime: number,
+  endTime: number,
+  champion: Individual,
+  worst: Individual,
   parameters: OptimizationParameters
 }
 
@@ -136,7 +151,7 @@ const initialState: AppState = {
 
   parameters: {
     seed: 42,
-    geneticIterations: 100,
+    geneticIterations: 250,
     populationSize: 25,
     mutationRate: 0.35,
     crossoverRate: 0.75,
@@ -151,6 +166,9 @@ const initialState: AppState = {
     maxTutoresPorGrupo: 8,
     similarityThreshold: 1,
     pesoRelativoTutores: [10, 8, 5, 3, 2],
+    inequalityAversion: 10,
+    maxGroupsPerStudent: 1,
+    slotsAreTimeFrames: false,
   },
 
   running: false,

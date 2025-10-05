@@ -98,7 +98,9 @@ interface Result {
   endTime: number,
   champion: Individual,
   worst: Individual,
-  parameters: OptimizationParameters
+  parameters: OptimizationParameters,
+  alumnos: Alumno[],
+  tutores: Tutor[]
 }
 
 interface AlumnoData { nombre: string, apellido: string, email: string, value: number, tutores: string[] }
@@ -152,22 +154,22 @@ const initialState: AppState = {
   parameters: {
     seed: 42,
     geneticIterations: 250,
-    populationSize: 25,
+    populationSize: 50,
     mutationRate: 0.35,
     crossoverRate: 0.75,
     tournamentSize: 3,
     elitismCount: 2,
 
-    minCantidadGrupos: 8,
-    maxCantidadGrupos: 20,
-    minAlumnosPorGrupo: 10,
-    maxAlumnosPorGrupo: 30,
-    minTutoresPorGrupo: 5,
-    maxTutoresPorGrupo: 8,
+    minCantidadGrupos: 1,
+    maxCantidadGrupos: 50,
+    minAlumnosPorGrupo: 1,
+    maxAlumnosPorGrupo: 11,
+    minTutoresPorGrupo: 1,
+    maxTutoresPorGrupo: 3,
     similarityThreshold: 1,
     pesoRelativoTutores: [10, 8, 5, 3, 2],
     inequalityAversion: 0,
-    maxGroupsPerStudent: 1,
+    maxGroupsPerStudent: 5,
     slotsAreTimeFrames: true,
   },
 

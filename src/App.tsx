@@ -97,7 +97,9 @@ interface Result {
   endTime: number,
   champion: Individual,
   worst: Individual,
-  parameters: OptimizationParameters
+  parameters: OptimizationParameters,
+  alumnos: Alumno[],
+  tutores: Tutor[]
 };
 
 const CustomTabPanel = (props: { children?: React.ReactNode; index: string; value: string; }) => {
@@ -284,6 +286,55 @@ const Maraton = () => {
 
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>, type: 'alumnos' | 'tutores') => {
     const parseCSV = (text: string, type: 'alumnos' | 'tutores'): { data: any[], columns: GridColDef[], error?: string } => {
+      // Proper CSV parser that handles quoted fields with commas and newlines
+      const parseCSVRows = (text: string): string[][] => {
+        const rows: string[][] = [];
+        let currentRow: string[] = [];
+        let currentField = '';
+        let inQuotes = false;
+
+        for (let i = 0; i < text.length; i++) {
+          const char = text[i];
+          const nextChar = text[i + 1];
+
+          if (char === '"' && inQuotes && nextChar === '"') {
+            // Escaped quote
+            currentField += '"';
+            i++; // Skip next quote
+          } else if (char === '"') {
+            // Toggle quote state
+            inQuotes = !inQuotes;
+          } else if (char === ',' && !inQuotes) {
+            // Field separator
+            currentRow.push(currentField.trim());
+            currentField = '';
+          } else if ((char === '\n' || char === '\r') && !inQuotes) {
+            // Row separator (handle both \n and \r\n)
+            if (char === '\r' && nextChar === '\n') {
+              i++; // Skip the \n in \r\n
+            }
+            currentRow.push(currentField.trim());
+            if (currentRow.some(f => f !== '')) { // Only add non-empty rows
+              rows.push(currentRow);
+            }
+            currentRow = [];
+            currentField = '';
+          } else {
+            currentField += char;
+          }
+        }
+
+        // Add last field and row if any
+        if (currentField || currentRow.length > 0) {
+          currentRow.push(currentField.trim());
+          if (currentRow.some(f => f !== '')) {
+            rows.push(currentRow);
+          }
+        }
+
+        return rows;
+      };
+
       const requiredAlumnosColumns = [
         'Fecha', 'Nombre', 'Apellido', 'Email', 'Rubro', 'Emprendimiento',
         'Descripción', 'Puntaje', 'Tutor1', 'Tutor2', 'Tutor3', 'Tutor4', 'Tutor5'
@@ -293,10 +344,97 @@ const Maraton = () => {
         'Nombre', 'Apellido'
       ];
 
-      const lines = text.trim().split('\n');
-      if (lines.length === 0) return { data: [], columns: [], error: 'Archivo CSV vacío' };
+      const rows = parseCSVRows(text.trim());
+      if (rows.length === 0) return { data: [], columns: [], error: 'Archivo CSV vacío' };
 
-      const headers = lines[0].split(',').map(h => h.trim().replace(/^"|"$/g, ''));
+      let headers = rows[0];
+
+      // Detect alternative alumnos format (e.g., "Inscripción Maratón" Google Forms export)
+      // This format has "Marca temporal", "Nombre completo", etc.
+      if (type === 'alumnos' && headers.includes('Marca temporal') && headers.includes('Nombre completo')) {
+        const data: any[] = [];
+        const marcaTemporalIdx = headers.indexOf('Marca temporal');
+        const emailIdx = headers.indexOf('Dirección de correo electrónico');
+        const nombreCompletoIdx = headers.indexOf('Nombre completo');
+        const emprendimientoIdx = headers.indexOf('Emprendimiento (Nombre, web, redes)');
+
+        for (let i = 1; i < rows.length; i++) {
+          const values = rows[i];
+          const nombreCompleto = values[nombreCompletoIdx] || '';
+
+          // Skip empty rows
+          if (!nombreCompleto.trim()) continue;
+
+          const nameParts = nombreCompleto.trim().split(/\s+/);
+          const nombre = nameParts[0] || '';
+          const apellido = nameParts.slice(1).join(' ') || '';
+
+          const row: any = {
+            id: data.length,
+            Fecha: values[marcaTemporalIdx] || '',
+            Nombre: nombre,
+            Apellido: apellido,
+            Email: values[emailIdx] || '',
+            Rubro: '', // Not in alternative format
+            Emprendimiento: values[emprendimientoIdx] || '',
+            Descripción: '', // Not in alternative format
+            Puntaje: '10', // Default to 10 as requested
+          };
+
+          // Extract tutors (Tutor 1, Tutor 2, etc.)
+          for (let tutorNum = 1; tutorNum <= 5; tutorNum++) {
+            const tutorIdx = headers.indexOf(`Tutor ${tutorNum}`);
+            row[`Tutor${tutorNum}`] = tutorIdx !== -1 ? (values[tutorIdx] || '') : '';
+          }
+
+          data.push(row);
+        }
+
+        const columns: GridColDef[] = requiredAlumnosColumns.map(header => ({
+          field: header,
+          headerName: header,
+          width: header === 'Descripción' ? 250 :
+            header === 'Email' ? 200 :
+              header === 'Nombre' || header === 'Apellido' ? 120 :
+                header === 'Puntaje' ? 80 : 150,
+          sortable: true,
+        }));
+
+        return { data, columns };
+      }
+
+      // Detect alternative tutores format (e.g., "Inscripción Maratón" format)
+      // This format has "Tutores" as the second column header
+      if (type === 'tutores' && headers.includes('Tutores')) {
+        // Parse alternative format: extract nombre from "Tutores" column (format: "Nombre Apellido")
+        const tutoresColumnIndex = headers.indexOf('Tutores');
+        const data: any[] = [];
+
+        for (let i = 1; i < rows.length; i++) {
+          const values = rows[i];
+          const fullName = values[tutoresColumnIndex];
+
+          // Skip empty rows and rows with "TOTAL"
+          if (fullName && fullName.trim() !== '' && !fullName.toUpperCase().includes('TOTAL')) {
+            const nameParts = fullName.trim().split(/\s+/);
+            const nombre = nameParts[0] || '';
+            const apellido = nameParts.slice(1).join(' ') || '';
+
+            data.push({
+              id: data.length,
+              Nombre: nombre,
+              Apellido: apellido
+            });
+          }
+        }
+
+        const columns: GridColDef[] = [
+          { field: 'Nombre', headerName: 'Nombre', width: 120, sortable: true },
+          { field: 'Apellido', headerName: 'Apellido', width: 120, sortable: true }
+        ];
+
+        return { data, columns };
+      }
 
       // Validate required columns
       const requiredColumns = type === 'alumnos' ? requiredAlumnosColumns : requiredTutoresColumns;
@@ -324,8 +462,8 @@ const Maraton = () => {
       const data: any[] = [];
       const validationErrors: string[] = [];
 
-      for (let i = 1; i < lines.length; i++) {
-        const values = lines[i].split(',').map(v => v.trim().replace(/^"|"$/g, ''));
+      for (let i = 1; i < rows.length; i++) {
+        const values = rows[i];
         const row: any = { id: i - 1 };
 
         columnsToUse.forEach((header) => {
@@ -718,12 +856,23 @@ const Maraton = () => {
 
   const Resultados = () => {
     // Get data from Redux store
-    const result = useSelector((state: RootState) => state.app.result) as Result | null;
+    const result = useSelector((state: RootState) => state.app.result) as Result;
+    const alumnos = useSelector((state: RootState) => state.app.result?.alumnos) as Alumno[];
     const alumnosData = useSelector((state: RootState) => state.app.alumnosData);
     const tutoresData = useSelector((state: RootState) => state.app.tutoresData);
     const pesoRelativoTutores = useSelector((state: RootState) => state.app.parameters.pesoRelativoTutores);
     const similarityThreshold = useSelector((state: RootState) => state.app.parameters.similarityThreshold);
     const maxTeoricalFitness = useSelector((state: RootState) => state.app.maxTeoricalFitness);
+
+    // Extract data from result
+    const champion = result.champion;
+    const grupos = champion.grupos;
+    const peticionesCount = alumnos.reduce((p, x) => p + x?.tutores?.filter(x => x).length, 0)
+    const asignacionesCount = grupos
+      .reduce((sum: number, grupo: Grupo) => sum + (grupo.alumnos?.length || 0), 0);
+
+    //const asignaciones = champion.
+
     // Helper functions
     const normalizeName = (name: string) => {
       if (!name) return '';
@@ -804,13 +953,7 @@ const Maraton = () => {
       );
     }
 
-    // Extract data from result
-    const champion = result.champion;
-    const grupos = champion.grupos || [];
-    const totalAlumnos = champion.alumnosIds ? champion.alumnosIds.length : 0;
-    const alumnosAsignados = grupos.reduce((sum: number, grupo: Grupo) =>
-      sum + (grupo.alumnos ? grupo.alumnos.length : 0), 0);
-    const alumnosSinAsignar = totalAlumnos - alumnosAsignados;
+
 
     // Convert grupos for display (tutores as names)
     const displayGrupos = grupos.map((grupo, index) => ({
@@ -823,6 +966,17 @@ const Maraton = () => {
 
     // Download CSV function
     const downloadResultsAsCSV = () => {
+      // Helper to escape CSV field (handles commas, quotes, newlines)
+      const escapeCSVField = (field: string): string => {
+        if (!field) return '';
+        const stringField = String(field);
+        // If field contains comma, quote, or newline, wrap in quotes and escape internal quotes
+        if (stringField.includes(',') || stringField.includes('"') || stringField.includes('\n') || stringField.includes('\r')) {
+          return `"${stringField.replace(/"/g, '""')}"`;
+        }
+        return stringField;
+      };
+
       const csvRows = ['Grupo,Nombre_Alumno,Apellido_Alumno,Email,Emprendimiento,Coincidencia,Tutores_Asignados'];
 
       displayGrupos.forEach((group: any) => {
@@ -834,13 +988,13 @@ const Maraton = () => {
           ) as any;
           const { score, maxScore } = calculateMatchScore(originalAlumno || alumno, group.tutores);
           const row = [
-            group.name,
-            alumno.nombre || '',
-            alumno.apellido || '',
-            alumno.email || '',
-            originalAlumno?.Emprendimiento || '',
-            `${score}/${maxScore}`,
-            `"${tutoresString}"`
+            escapeCSVField(group.name),
+            escapeCSVField(alumno.nombre || ''),
+            escapeCSVField(alumno.apellido || ''),
+            escapeCSVField(alumno.email || ''),
+            escapeCSVField(originalAlumno?.Emprendimiento || ''),
+            escapeCSVField(`${score}/${maxScore}`),
+            escapeCSVField(tutoresString)
           ].join(',');
           csvRows.push(row);
         });
@@ -862,17 +1016,8 @@ const Maraton = () => {
       <Box sx={{ p: 3, flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
         {/* Header */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h5" fontWeight={600}>
-            Resultados de la Asignación
-          </Typography>
-          <Button
-            variant="contained"
-            startIcon={<DownloadIcon />}
-            onClick={downloadResultsAsCSV}
-            sx={{ bgcolor: 'success.main' }}
-          >
-            Descargar CSV
-          </Button>
+          <Typography children={"Resultados de la Asignación"} variant="h5" fontWeight={600} />
+          <Button children={"Descargar CSV"} variant="contained" startIcon={<DownloadIcon />} onClick={downloadResultsAsCSV} sx={{ bgcolor: 'success.main' }} />
         </Box>
 
         {/* Statistics Summary */}
@@ -884,31 +1029,49 @@ const Maraton = () => {
             </Box>
             <Box>
               <Typography variant="caption" color="text.secondary">Total Alumnos</Typography>
-              <Typography variant="h6">{totalAlumnos}</Typography>
+              <Typography variant="h6">{alumnos.length}</Typography>
             </Box>
             <Box>
               <Typography variant="caption" color="text.secondary">Asignados</Typography>
               <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexWrap: 'wrap' }}>
                 {(() => {
                   // Calculate score ranges using the same logic as the individual student display
-                  const scoreRanges = { high: 0, medium: 0, low: 0, veryLow: 0 };
+                  //const scoreRanges = { high: 0, medium: 0, low: 0, veryLow: 0 };
 
-                  grupos.forEach((grupo: Grupo) => {
-                    const tutoresIds = grupo.tutores.map(x => x.id);
-                    grupo.alumnos.forEach((alumno: Alumno) => {
-                      const score = alumno.tutores.reduce((sum, _, idx) =>
-                        sum + (tutoresIds.includes(alumno.tutores[idx].id) ? (pesoRelativoTutores[idx] || 0) : 0), 0);
-                      const maxScore = alumno.tutores.reduce((sum, _, idx) =>
-                        sum + (pesoRelativoTutores[idx] || 0), 0);
+                  const scoreRanges = alumnos.reduce((p, a) => {
+                    const score = a.tutores.reduce((sum, t, idx) => {
+                      if (grupos.find(g => g.alumnos.find(x => x.id === a.id) && g.tutores.find(x => x.id === t.id))) {
+                        sum = sum + pesoRelativoTutores[idx]
+                      }
+                      return sum;
+                    }, 0);
 
-                      const percentage = maxScore > 0 ? (score / maxScore) : 0;
+                    const maxScore = a.tutores.reduce((sum, _, idx) => sum + pesoRelativoTutores[idx], 0);
 
-                      if (percentage >= 0.75) scoreRanges.high++;
-                      else if (percentage >= 0.5) scoreRanges.medium++;
-                      else if (percentage >= 0.25) scoreRanges.low++;
-                      else scoreRanges.veryLow++;
-                    });
-                  });
+                    const percentage = maxScore > 0 ? (score / maxScore) : 0;
+                    if (percentage >= 0.75) p.high++;
+                    else if (percentage >= 0.5) p.medium++;
+                    else if (percentage >= 0.25) p.low++;
+                    else p.veryLow++;
+                    return p;
+                  }, { high: 0, medium: 0, low: 0, veryLow: 0 })
+
+                  // grupos.forEach((grupo: Grupo) => {
+                  //   const tutoresIds = grupo.tutores.map(x => x.id);
+                  //   grupo.alumnos.forEach((alumno: Alumno) => {
+                  //     const score = alumno.tutores.reduce((sum, _, idx) =>
+                  //       sum + (tutoresIds.includes(alumno.tutores[idx].id) ? (pesoRelativoTutores[idx] || 0) : 0), 0);
+                  //     const maxScore = alumno.tutores.reduce((sum, _, idx) =>
+                  //       sum + (pesoRelativoTutores[idx] || 0), 0);
+
+                  //     const percentage = maxScore > 0 ? (score / maxScore) : 0;
+
+                  //     if (percentage >= 0.75) scoreRanges.high++;
+                  //     else if (percentage >= 0.5) scoreRanges.medium++;
+                  //     else if (percentage >= 0.25) scoreRanges.low++;
+                  //     else scoreRanges.veryLow++;
+                  //   });
+                  // });
 
                   return (
                     <>
@@ -922,9 +1085,9 @@ const Maraton = () => {
               </Box>
             </Box>
             <Box>
-              <Typography variant="caption" color="text.secondary">Sin Asignar</Typography>
-              <Typography variant="h6" color={alumnosSinAsignar > 0 ? "warning.main" : "text.primary"}>
-                {alumnosSinAsignar}
+              <Typography variant="caption" color="text.secondary">Total Asignaciones</Typography>
+              <Typography variant="h6" color={"text.primary"}>
+                {asignacionesCount} / {peticionesCount}
               </Typography>
             </Box>
             <Box>
@@ -946,12 +1109,12 @@ const Maraton = () => {
                 })()}
               </Typography>
             </Box>
-            <Box>
+            {/* <Box>
               <Typography variant="caption" color="text.secondary">Iteraciones</Typography>
               <Typography variant="h6">
                 {result?.geneticSummary?.length || 0}
               </Typography>
-            </Box>
+            </Box> */}
           </Box>
         </Box>
 
@@ -1299,6 +1462,7 @@ const Maraton = () => {
                     pesoRelativoTutores.reduce((p, _x, i) => p + (i < alumno.tutores.length ? pesoRelativoTutores[i] : 0), 0);
                   return { ...alumno, satisfaction };
                 }).sort((a, b) => b.satisfaction - a.satisfaction).map((student, index) => {
+                  
                   return <Box key={index} sx={{
                     display: 'grid',
                     gridTemplateColumns: '1.5fr 1fr 1fr 2fr',

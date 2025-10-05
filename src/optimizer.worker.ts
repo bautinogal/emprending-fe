@@ -120,12 +120,17 @@ interface AppState {
     optimizationError: string | null;
 }
 
+const lerp = (start: number, end: number, amount: number): number => {
+    return start * (1 - amount) + end * amount;
+}
+
 const mulberry32 = (seed: number) => {
     return function () {
         let t = seed += 0x6D2B79F5;
         t = Math.imul(t ^ t >>> 15, t | 1);
         t ^= t + Math.imul(t ^ t >>> 7, t | 61);
-        return ((t ^ t >>> 14) >>> 0) / 4294967296;
+        let res = ((t ^ t >>> 14) >>> 0) / 4294967296;
+        return res;
     };
 };
 
@@ -241,7 +246,7 @@ self.onmessage = (e) => {
                 return p;
             }, {});
 
-            const alumnoTutores: Tutor[] = alumno.tutores.map((x) => {
+            const alumnoTutores: Tutor[] = (alumno?.tutores || []).map((x) => {
 
                 const matchRanking = tutores
                     .map(tutor => ({ ...tutor, score: calculateSimilarity(x, `${tutor.nombre} ${tutor.apellido}`) }))
@@ -318,6 +323,7 @@ self.onmessage = (e) => {
     };
 
     const getSlots = (parameters: OptimizationParameters, alumnos: Alumno[], tutores: Tutor[], rnd: number): Slot[] => {
+
         const generateConstrainedArray = (seed: number, minLength: number, maxLength: number, minValue: number, maxValue: number): number[] => {
             const rng = mulberry32(seed);
 
@@ -331,11 +337,12 @@ self.onmessage = (e) => {
 
             return array;
         };
+        
 
         // const minGroups = Math.max(parameters.minCantidadGrupos, Math.ceil(tutores.length / parameters.maxTutoresPorGrupo), Math.ceil(alumnos.length / parameters.maxAlumnosPorGrupo));
         // const maxGroups = Math.min(parameters.maxCantidadGrupos, Math.floor(tutores.length / parameters.minTutoresPorGrupo), Math.floor(alumnos.length / parameters.minAlumnosPorGrupo));
-        const minGroups = Math.max(parameters.minCantidadGrupos);
-        const maxGroups = Math.min(
+        let minGroups = Math.max(parameters.minCantidadGrupos);
+        let maxGroups = Math.min(
             parameters.maxCantidadGrupos,
             Math.floor(tutores.length / parameters.minTutoresPorGrupo),
             Math.floor(alumnos.length / parameters.minAlumnosPorGrupo)
@@ -343,7 +350,14 @@ self.onmessage = (e) => {
 
         if (maxGroups < minGroups) throw new Error("Restricciones incompatibles!");
 
-        const tutoresSlots = generateConstrainedArray(rnd, minGroups, maxGroups, parameters.minTutoresPorGrupo, parameters.maxTutoresPorGrupo);
+        const rng = mulberry32(rnd);
+        const rnda = rng();
+        const rndb = rng();
+        const a = Math.round(lerp(parameters.minTutoresPorGrupo, parameters.maxTutoresPorGrupo, rnda));
+        const b =  Math.round(lerp(parameters.minTutoresPorGrupo, parameters.maxTutoresPorGrupo, rndb));
+        const minTutoresPorGrupo = Math.min(a,b);
+        const maxTutoresPorGrupo = Math.max(a,b);
+        const tutoresSlots = generateConstrainedArray(rnd, minGroups, maxGroups, minTutoresPorGrupo, maxTutoresPorGrupo);
 
         return tutoresSlots.map(a => ({ alumnosSlots: parameters.maxAlumnosPorGrupo, tutoresSlots: a }));
     };
@@ -500,7 +514,7 @@ self.onmessage = (e) => {
                 return grupos;
             }, gruposInicialesTutores);
 
-            return grupos;
+            return grupos.filter(x => x.alumnos.length > 0 && x.tutores.length > 0);
         };
 
         return getGroupsDummy(individual, alumnos, tutores, parameters);
@@ -519,7 +533,7 @@ self.onmessage = (e) => {
             seed = Math.floor(rng() * 1000000);
             let individualTutoresIds = shuffleArray(tutoresIds, seed);
             seed = Math.floor(rng() * 1000000);
-            let slots = getSlots(parameters, alumnos, tutores, seed);
+            let slots = getSlots(parameters, alumnos, tutores, Math.floor(rng() * 1000000));
 
             let hash = hashArray([...individualAlumnosIds, ...individualTutoresIds, ...slots.map(x => [x.alumnosSlots, x.tutoresSlots]).flat()]);
             let counter = 0;
@@ -531,7 +545,7 @@ self.onmessage = (e) => {
                 seed = Math.floor(rng() * 1000000);
                 individualTutoresIds = shuffleArray(tutoresIds, seed);
                 seed = Math.floor(rng() * 1000000);
-                slots = getSlots(parameters, alumnos, tutores, seed);
+                slots = getSlots(parameters, alumnos, tutores, Math.floor(rng() * 1000000));
 
                 hash = hashArray([...individualAlumnosIds, ...individualTutoresIds, ...slots.map(x => [x.alumnosSlots, x.tutoresSlots]).flat()]);
                 counter++;
@@ -817,7 +831,7 @@ self.onmessage = (e) => {
             const pos2 = Math.floor(rng() * mutated[1].length);
             [mutated[1][pos1], mutated[1][pos2]] = [mutated[1][pos2], mutated[1][pos1]];
         } else {
-            mutated[2] = getSlots(parameters, alumnos, tutores, rng());
+            mutated[2] = getSlots(parameters, alumnos, tutores, Math.floor(rng() * 1000000));
         }
 
 
@@ -854,7 +868,7 @@ self.onmessage = (e) => {
         console.log('Starting genetic algorithm with:', { alumnosData, tutoresData, parameters, alumnos, tutores, warnings, perfectFitness, maxTeoricalFitness });
         let currentBestScore = 0;
         let currentWorstScore = 0;
-        const rng = mulberry32(parameters.seed || 42);
+        const rng =  mulberry32(parameters.seed || 42);
         console.log('RNG initialized with seed', parameters.seed);
         let history = initHistory(alumnos, tutores, parameters, rng);
         let percentageCompleted = 0;
@@ -903,7 +917,7 @@ self.onmessage = (e) => {
         self.postMessage({
             type: "finish",
             payload: {
-                combinationsN, warnings, inititialTime, endTime, champion, worst, parameters, geneticSummary
+                combinationsN, warnings, inititialTime, endTime, champion, worst, parameters, geneticSummary, alumnos, tutores
             }
         });
     } catch (error) {

@@ -57,30 +57,30 @@ interface Individual {
   fitness: number;
 };
 
-interface Generation {
-  i: number;
-  inititialTime: number;
-  endTime: number | null;
+// interface Generation {
+//   i: number;
+//   inititialTime: number;
+//   endTime: number | null;
 
-  individuals: string[];
-  tournments: {
-    groupA: string[];
-    groupB: string[];
-    result: {
-      parentA: string;
-      parentB: string;
-      offspring: string;
-      crossover: boolean;
-    }
-  }[];
+//   individuals: string[];
+//   tournments: {
+//     groupA: string[];
+//     groupB: string[];
+//     result: {
+//       parentA: string;
+//       parentB: string;
+//       offspring: string;
+//       crossover: boolean;
+//     }
+//   }[];
 
-  shuffleRepeats: number;
+//   shuffleRepeats: number;
 
-  // Fitness statistics
-  bestFitness: number;
-  worstFitness: number;
-  averageFitness: number;
-};
+//   // Fitness statistics
+//   bestFitness: number;
+//   worstFitness: number;
+//   averageFitness: number;
+// };
 
 interface Result {
   warnings: Warnings;
@@ -1442,49 +1442,44 @@ const Maraton = () => {
               <Box sx={{ mt: 2 }}>
                 <Box sx={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 2fr', gap: 1, mb: 1, p: 1, bgcolor: 'grey.100', borderRadius: 0.5 }}>
                   <Typography variant="body2" fontWeight={600}>Nombre</Typography>
-                  <Typography variant="body2" fontWeight={600}>Grupo</Typography>
+                  {/* <Typography variant="body2" fontWeight={600}>Grupos</Typography> */}
                   <Typography variant="body2" fontWeight={600}>% Satisfacción</Typography>
                   <Typography variant="body2" fontWeight={600}>Tutores</Typography>
                 </Box>
-                {result.champion.grupos.map((group: Grupo, i) => {
-                  const tutoresIds = group.tutores.map(x => x.id);
-                  return group.alumnos.map((alumno: Alumno) => {
-                    return {
-                      ...alumno, grupo: "Grupo " + (i + 1), tutores: alumno.tutores.map((tutor: Tutor) => {
-                        let estado = tutor.id === -1 ? "Not Found" : (tutoresIds.includes(tutor.id) ? "Included" : "Missed");
-                        return { ...tutor, estado };
-                      })
-                    }
-                  });
-                }).flat().map((alumno) => {
-                  const pesoRelativoTutores = result.parameters.pesoRelativoTutores;
-                  const satisfaction = 100 * alumno.tutores.reduce((p, x, i) => p + (x.estado === "Included" ? pesoRelativoTutores[i] : 0), 0) /
-                    pesoRelativoTutores.reduce((p, _x, i) => p + (i < alumno.tutores.length ? pesoRelativoTutores[i] : 0), 0);
-                  return { ...alumno, satisfaction };
-                }).sort((a, b) => b.satisfaction - a.satisfaction).map((student, index) => {
-                  
+                {result.alumnos.map((student, index) => {
+                  const _student = student.tutores.reduce((p, t, idx) => {
+                    const maxSatisfaction = student.tutores.filter(x => x).reduce((p, x, i) => p + pesoRelativoTutores[i], 0);
+                    const grupo = grupos.find(g => g.alumnos.find(x => x.id === student.id));
+                    const tutor = student.tutores.find(x => x.id === t.id);
+                    p.tutoresPedidos.push(t);
+                    if (grupo && !p.grupos.includes(grupo)) {
+                      p.grupos.push(grupo);
+                    };
+                    if (tutor && !p.tutores.includes(tutor)) {
+                      p.tutores.push(tutor);
+                      p.satisfaction = p.satisfaction + pesoRelativoTutores[idx] / maxSatisfaction;
+                    };
+                    return p;
+                  }, { grupos: [] as Grupo[], tutores: [] as Tutor[], tutoresPedidos: [] as Tutor[], satisfaction: 0, nombre: student.nombre, apellido: student.apellido });
+
+
                   return <Box key={index} sx={{
-                    display: 'grid',
-                    gridTemplateColumns: '1.5fr 1fr 1fr 2fr',
-                    gap: 1,
-                    p: 1,
-                    borderBottom: '1px solid',
-                    borderColor: 'divider',
-                    '&:hover': { bgcolor: 'grey.50' }
+                    display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 2fr', gap: 1,
+                    p: 1, borderBottom: '1px solid', borderColor: 'divider', '&:hover': { bgcolor: 'grey.50' }
                   }}>
-                    <Typography variant="body2">{student.nombre} {student.apellido}</Typography>
-                    <Typography variant="body2">{student.grupo}</Typography>
+                    <Typography variant="body2">{_student.nombre} {_student.apellido}</Typography>
+                    {/* <Typography variant="body2">{_student.grupos.map((g, i) => `Grupo ${i + 1}`).join(",")}</Typography> */}
                     <Typography variant="body2" sx={{
-                      color: student.satisfaction >= 75 ? 'success.main' :
-                        student.satisfaction >= 50 ? '#FFC107' :
-                          student.satisfaction >= 25 ? 'warning.dark' :
+                      color: _student.satisfaction >= 0.75 ? 'success.main' :
+                        _student.satisfaction >= 0.50 ? '#FFC107' :
+                          _student.satisfaction >= 0.25 ? 'warning.dark' :
                             'error.main',
                       fontWeight: 600
                     }}>
-                      {student.satisfaction.toFixed(1)}%
+                      {(_student.satisfaction * 100).toFixed(1)}%
                     </Typography>
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5 }}>
-                      {student.tutores.length > 0 ? student.tutores?.map((tutor, tutorIndex) => (
+                      {_student.tutoresPedidos.length > 0 ? _student.tutoresPedidos?.map((tutor, tutorIndex) => (
                         <Typography
                           key={tutorIndex}
                           variant="caption"
@@ -1495,8 +1490,8 @@ const Maraton = () => {
                             fontSize: '0.7rem',
                             fontWeight: 500,
                             color: 'white',
-                            bgcolor: tutor.estado === 'Included' ? 'success.main' :
-                              tutor.estado === 'Missed' ? 'warning.main' : 'error.main'
+                            bgcolor: _student.tutores.includes(tutor) ? 'success.main' :'error.main',
+                            //   tutor.estado === 'Missed' ? 'warning.main' : 'error.main'
                           }}
                         >
                           {tutor.nombre} {tutor.apellido}

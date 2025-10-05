@@ -304,7 +304,7 @@ self.onmessage = (e) => {
             const idTutoresGrupo = grupo.tutores.map(t => t.id);
             fitness += grupo.alumnos.reduce((pr, alumno) => {
                 const idTutoresPreferidos = alumno.tutores.map(t => t.id);
-                const maxAlumnoScore = idTutoresPreferidos.reduce((p, x, i) => p + alumno.value * parameters.pesoRelativoTutores[i], 0);
+                const maxAlumnoScore = idTutoresPreferidos.reduce((p, _x, i) => p + alumno.value * parameters.pesoRelativoTutores[i], 0);
                 const linearScore = idTutoresPreferidos.reduce((pre, tutorPref, i) => {
                     if (idTutoresGrupo.includes(tutorPref)) {
                         pre = pre + alumno.value * parameters.pesoRelativoTutores[i];
@@ -904,7 +904,7 @@ self.onmessage = (e) => {
         console.log('Optimization process finished:', { history, currentBestScore, perfectFitness, maxTeoricalFitness });
         console.log('Best individuals:', Object.entries(history.individuals).sort((a, b) => (b[1].fitness || 0) - (a[1].fitness || 0)).map(x => x[1]));
         const combinationsN = Object.keys(history.individuals).length;
-        const geneticSummary = Object.values(history.generations).map((x, i) => ({
+        const geneticSummary = Object.values(history.generations).map((x, _i) => ({
             inititialTime: x.inititialTime,
             endTime: x.endTime,
             shuffleRepeats: x.shuffleRepeats,

@@ -72,16 +72,16 @@ interface Generation {
   worstFitness: number;
   averageFitness: number;
 };
-interface History {
-  inititialTime: number;
-  endTime: number | null;
+// interface History {
+//   inititialTime: number;
+//   endTime: number | null;
 
-  champion: Individual;
-  worst: Individual;
-  individuals: { [key: string]: Individual };
-  populationZero: string[];
-  generations: Generation[];
-};
+//   champion: Individual;
+//   worst: Individual;
+//   individuals: { [key: string]: Individual };
+//   populationZero: string[];
+//   generations: Generation[];
+// };
 
 interface Result {
   warnings: Warnings;

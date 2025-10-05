@@ -1448,7 +1448,7 @@ const Maraton = () => {
                 </Box>
                 {result.alumnos.map((student, index) => {
                   const _student = student.tutores.reduce((p, t, idx) => {
-                    const maxSatisfaction = student.tutores.filter(x => x).reduce((p, x, i) => p + pesoRelativoTutores[i], 0);
+                    const maxSatisfaction = student.tutores.filter(x => x).reduce((p, _x, i) => p + pesoRelativoTutores[i], 0);
                     const grupo = grupos.find(g => g.alumnos.find(x => x.id === student.id));
                     const tutor = student.tutores.find(x => x.id === t.id);
                     p.tutoresPedidos.push(t);

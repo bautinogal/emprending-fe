@@ -865,11 +865,11 @@ const Maraton = () => {
     const maxTeoricalFitness = useSelector((state: RootState) => state.app.maxTeoricalFitness);
 
     // Extract data from result
-    const champion = result.champion;
-    const grupos = champion.grupos;
-    const peticionesCount = alumnos.reduce((p, x) => p + x?.tutores?.filter(x => x).length, 0)
+    const champion = result?.champion;
+    const grupos = champion?.grupos;
+    const peticionesCount = alumnos?.reduce((p, x) => p + x?.tutores?.filter(x => x).length, 0)
     const asignacionesCount = grupos
-      .reduce((sum: number, grupo: Grupo) => sum + (grupo.alumnos?.length || 0), 0);
+      ?.reduce((sum: number, grupo: Grupo) => sum + (grupo.alumnos?.length || 0), 0);
 
     //const asignaciones = champion.
 

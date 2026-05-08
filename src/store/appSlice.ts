@@ -28,6 +28,7 @@ interface OptimizationParameters {
   pesoRelativoTutores: number[];
   inequalityAversion: number; // 1 - 3 // 1 is linear, bigger value tend to favor middle values
   maxGroupsPerStudent: number;
+  defaultMaxBloquesPorAlumno: number;
   slotsAreTimeFrames: boolean;
 }
 
@@ -167,9 +168,10 @@ const initialState: AppState = {
     minTutoresPorGrupo: 1,
     maxTutoresPorGrupo: 3,
     similarityThreshold: 1,
-    pesoRelativoTutores: [10, 8, 5, 3, 2],
+    pesoRelativoTutores: [10, 8, 5, 3, 2, 1, 1],
     inequalityAversion: 0,
     maxGroupsPerStudent: 5,
+    defaultMaxBloquesPorAlumno: 5,
     slotsAreTimeFrames: true,
   },
 
@@ -188,7 +190,7 @@ const initialState: AppState = {
 };
 
 // Import the worker using Vite's worker syntax
-import OptimizerWorker from '../optimizer.worker.ts?worker';
+import OptimizerWorker from '../worker/optimizer.worker.ts?worker';
 
 export const optimizeGroups = createAsyncThunk<
   Result,

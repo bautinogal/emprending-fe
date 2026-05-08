@@ -1,3 +1,5 @@
+import { lerp, mulberry32, hashArray, shuffleArray, calculateSimilarity, Logger } from '../lib';
+
 interface Warnings {
     others: string[];
     unassignedAlumnos: string[];
@@ -15,7 +17,6 @@ interface OptimizationParameters {
     tournamentSize: number; // < n / 2 //  2-3 for exploration, 4-5 for exploitation
     elitismCount: number; // 0 - 1 // 2-5% of population size
 
-
     // Assignment parameters
     minCantidadGrupos: number;
     maxCantidadGrupos: number;
@@ -23,16 +24,19 @@ interface OptimizationParameters {
     maxAlumnosPorGrupo: number;
     minTutoresPorGrupo: number;
     maxTutoresPorGrupo: number;
+    maxGroupsPerStudent: number;
+   
+    defaultMaxBloquesPorAlumno: number;
+    slotsAreTimeFrames: boolean;
+
     similarityThreshold: number;
     pesoRelativoTutores: number[];
     inequalityAversion: number; // 1 - 3 // 1 is linear, bigger value tend to favor middle values
-    maxGroupsPerStudent: number;
-    slotsAreTimeFrames: boolean;
 }
 
 interface Tutor { nombre: string, apellido: string, email: string, id: number }
 
-interface Alumno { nombre: string, apellido: string, email: string, value: number, tutores: Tutor[], id: number }
+interface Alumno { nombre: string, apellido: string, email: string, value: number, tutores: Tutor[], id: number, maxBloques: number }
 
 interface Grupo { tutores: Tutor[], alumnos: Alumno[] };
 
@@ -120,109 +124,15 @@ interface AppState {
     optimizationError: string | null;
 }
 
-const lerp = (start: number, end: number, amount: number): number => {
-    return start * (1 - amount) + end * amount;
-}
+const logger = new Logger({ enabled: false });
+const log = logger.log.bind(logger);
 
-const mulberry32 = (seed: number) => {
-    return function () {
-        let t = seed += 0x6D2B79F5;
-        t = Math.imul(t ^ t >>> 15, t | 1);
-        t ^= t + Math.imul(t ^ t >>> 7, t | 61);
-        let res = ((t ^ t >>> 14) >>> 0) / 4294967296;
-        return res;
-    };
-};
-
-const hashArray = (arr: number[] | [number[], number[], number[]]): string => {
-    return arr.flat().join(',');
-};
-
-const shuffleArray = <T>(array: T[], seed: number): T[] => {
-    const random = mulberry32(seed);
-    const result = [...array];
-
-    for (let i = result.length - 1; i > 0; i--) {
-        const j = Math.floor(random() * (i + 1));
-        [result[i], result[j]] = [result[j], result[i]];
-    }
-
-    return result;
-};
-
-const normalizeName = (name: string) => {
-    if (!name) return '';
-    return name.toLowerCase()
-        .replace(/á/g, 'a')
-        .replace(/é/g, 'e')
-        .replace(/í/g, 'i')
-        .replace(/ó/g, 'o')
-        .replace(/ú/g, 'u')
-        .replace(/ñ/g, 'n')
-        .replace(/\s+/g, ' ')
-        .trim();
-};
-
-const calculateSimilarity = (str1: string, str2: string): number => {
-    const levenshteinDistance = (str1: string, str2: string): number => {
-        const m = str1.length;
-        const n = str2.length;
-        const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
-
-        for (let i = 0; i <= m; i++) dp[i][0] = i;
-        for (let j = 0; j <= n; j++) dp[0][j] = j;
-
-        for (let i = 1; i <= m; i++) {
-            for (let j = 1; j <= n; j++) {
-                if (str1[i - 1] === str2[j - 1]) {
-                    dp[i][j] = dp[i - 1][j - 1];
-                } else {
-                    dp[i][j] = Math.min(
-                        dp[i - 1][j] + 1,    // deletion
-                        dp[i][j - 1] + 1,    // insertion
-                        dp[i - 1][j - 1] + 1 // substitution
-                    );
-                }
-            }
-        }
-        return dp[m][n];
-    };
-
-    if (!str1 || !str2) return 0;
-
-    const normalizedStr1 = normalizeName(str1);
-    const normalizedStr2 = normalizeName(str2);
-
-    // Exact match after normalization
-    if (normalizedStr1 === normalizedStr2) return 1.0;
-
-    // Check for abbreviation match first (higher priority than Levenshtein)
-    // const parts1 = normalizedStr1.split(' ');
-    // const parts2 = normalizedStr2.split(' ');
-    // if (parts1.length >= 2 && parts2.length >= 2) {
-    //   const lastNameMatch = parts1[parts1.length - 1] === parts2[parts2.length - 1];
-    //   const firstInitialMatch = parts1[0].charAt(0) === parts2[0].charAt(0);
-    //   if (lastNameMatch && parts1[0].length <= 2 && firstInitialMatch) {
-    //     return 0.95; // High similarity for abbreviations
-    //   }
-    // }
-
-    // Calculate Levenshtein similarity for other cases
-    const maxLen = Math.max(normalizedStr1.length, normalizedStr2.length);
-    if (maxLen === 0) return 1.0;
-
-    const distance = levenshteinDistance(normalizedStr1, normalizedStr2);
-    const similarity = 1 - (distance / maxLen);
-
-    return Math.max(0, similarity);
-};
-
-console.log('Worker script loaded successfully!');
+log('Worker script loaded successfully!');
 
 self.onmessage = (e) => {
 
 
-    console.log('Worker received message from main thread:', !!e.data);
+    log('Worker received message from main thread:', !!e.data);
 
     const prepareData = (alumnosData: AlumnoData[], tutoresData: TutorData[], parameters: OptimizationParameters): { alumnos: Alumno[], tutores: Tutor[], warnings: Warnings } => {
         const warnings: Warnings = { others: [], unassignedAlumnos: [], tutoresNotFound: [] };
@@ -267,7 +177,13 @@ self.onmessage = (e) => {
                 }
 
             });
-            return { ...alumno, tutores: alumnoTutores, id: i }
+
+            const parsedMaxBloques = parseInt(alumno?.maxbloques);
+            const maxBloques = Number.isFinite(parsedMaxBloques) && parsedMaxBloques > 0
+                ? parsedMaxBloques
+                : parameters.defaultMaxBloquesPorAlumno;
+
+            return { ...alumno, tutores: alumnoTutores, id: i, maxBloques }
         });
 
         return { alumnos, tutores, warnings };
@@ -410,7 +326,7 @@ self.onmessage = (e) => {
         //                 }
         //             }
         //         }
-        //         console.log({ currentPotentialGroupPos, updatedPotentialGroup })
+        //         log({ currentPotentialGroupPos, updatedPotentialGroup })
         //         return { currentPotentialGroupPos, updatedPotentialGroup };
         //     };
 
@@ -483,7 +399,7 @@ self.onmessage = (e) => {
 
             const grupos = alumnosIds.filter(x => x).reduce((grupos, alumnoId) => {
                 if (alumnoId === -1) {
-                    console.log({ grupos, alumnoId, individual, alumnos, tutores, parameters })
+                    log({ grupos, alumnoId, individual, alumnos, tutores, parameters })
                     throw Error("AlumnoId is -1!")
                 }
                 const alumno = alumnos.find(x => x.id === alumnoId);
@@ -495,7 +411,10 @@ self.onmessage = (e) => {
                         return !(grupoTutor && grupoTutor.alumnos.find(x => x.id === alumnoId));
                     })
 
-                if (remainingTutores && remainingTutores?.length > 0) {
+                const currentBloques = grupos.filter(g => g.alumnos.find(a => a.id === alumnoId)).length;
+                const bloquesLimit = alumno?.maxBloques ?? parameters.defaultMaxBloquesPorAlumno;
+
+                if (remainingTutores && remainingTutores?.length > 0 && currentBloques < bloquesLimit) {
                     let target = grupos
                         .filter((g, i) =>
                             g.alumnos.length < slots[i].alumnosSlots &&
@@ -522,7 +441,7 @@ self.onmessage = (e) => {
 
     const initHistory = (alumnos: Alumno[], tutores: Tutor[], parameters: OptimizationParameters, rng: Function): History => {
 
-        const alumnosIds = alumnos.map(x => Array(x.tutores.length).fill(null).map(_t => x.id)).flat();
+        const alumnosIds = alumnos.map(x => Array(Math.min(x.tutores.length, x.maxBloques)).fill(null).map(_t => x.id)).flat();
         const tutoresIds = tutores.map(x => x.id);
 
         const individuals: { [key: string]: Individual } = {};
@@ -539,7 +458,7 @@ self.onmessage = (e) => {
             let counter = 0;
 
             while (individuals[hash] != null) {
-                console.log('Duplicate individual found, reshuffling...');
+                log('Duplicate individual found, reshuffling...');
                 seed = Math.floor(rng() * 1000000);
                 individualAlumnosIds = shuffleArray(alumnosIds, seed);
                 seed = Math.floor(rng() * 1000000);
@@ -575,7 +494,7 @@ self.onmessage = (e) => {
         const initialWorstFitness = Math.min(...initialFitnesses);
         const initialAverageFitness = initialFitnesses.reduce((sum, fitness) => sum + fitness, 0) / initialFitnesses.length;
 
-        console.log(`Initial population - Best: ${initialBestFitness}, Worst: ${initialWorstFitness}, Average: ${initialAverageFitness.toFixed(2)}`);
+        log(`Initial population - Best: ${initialBestFitness}, Worst: ${initialWorstFitness}, Average: ${initialAverageFitness.toFixed(2)}`);
 
         return {
             inititialTime: Date.now(),
@@ -799,7 +718,7 @@ self.onmessage = (e) => {
             offspring[2][i] = parentA[2][i];
         }
 
-        //console.log({ alumnosSize, alumnosStart, alumnosEnd, parentA, parentB })
+        //log({ alumnosSize, alumnosStart, alumnosEnd, parentA, parentB })
         // Fill remaining positions from parentB
         let currentPos = 0;
         for (let i = 0; i < slotsSize; i++) {
@@ -842,7 +761,7 @@ self.onmessage = (e) => {
 
         let individual: [number[], number[], Slot[]];
         let hash: string;
-        const alumnosIds = alumnos.map(x => Array(x.tutores.length).fill(null).map(_t => x.id)).flat();
+        const alumnosIds = alumnos.map(x => Array(Math.min(x.tutores.length, x.maxBloques)).fill(null).map(_t => x.id)).flat();
         const tutoresIds = tutores.map(x => x.id);
         // Keep shuffling until we get a unique one
         do {
@@ -858,21 +777,21 @@ self.onmessage = (e) => {
     };
 
     try {
-        console.log('Optimization process started with state:', e);
+        log('Optimization process started with state:', e);
         const state = e.data as { app: AppState };
 
         const { alumnosData, tutoresData, parameters } = state.app;
         const { alumnos, tutores, warnings } = prepareData(alumnosData, tutoresData, parameters);
         const { perfectFitness, maxTeoricalFitness } = getMaxScores(alumnos, parameters);
 
-        console.log('Starting genetic algorithm with:', { alumnosData, tutoresData, parameters, alumnos, tutores, warnings, perfectFitness, maxTeoricalFitness });
+        log('Starting genetic algorithm with:', { alumnosData, tutoresData, parameters, alumnos, tutores, warnings, perfectFitness, maxTeoricalFitness });
         let currentBestScore = 0;
         let currentWorstScore = 0;
         const rng =  mulberry32(parameters.seed || 42);
-        console.log('RNG initialized with seed', parameters.seed);
+        log('RNG initialized with seed', parameters.seed);
         let history = initHistory(alumnos, tutores, parameters, rng);
         let percentageCompleted = 0;
-        console.log({ alumnos, tutores, parameters, perfectFitness, maxTeoricalFitness });
+        log({ alumnos, tutores, parameters, perfectFitness, maxTeoricalFitness });
         for (let i = 0; i < parameters.geneticIterations && currentBestScore < perfectFitness; i++) {
             iterate(history, alumnos, tutores, parameters, rng, i + 1);
             currentBestScore = history.champion.fitness;
@@ -880,8 +799,8 @@ self.onmessage = (e) => {
             percentageCompleted = (i + 1) / parameters.geneticIterations;
 
             const lastGen = history.generations[history.generations.length - 1];
-            console.log(`Iteration ${i + 1}/${parameters.geneticIterations} - ${Math.round(percentageCompleted * 100)}% completed`);
-            console.log(`  Generation stats - Best: ${lastGen.bestFitness.toFixed(4)}, Worst: ${lastGen.worstFitness.toFixed(4)}, Avg: ${lastGen.averageFitness.toFixed(4)}`);
+            log(`Iteration ${i + 1}/${parameters.geneticIterations} - ${Math.round(percentageCompleted * 100)}% completed`);
+            log(`  Generation stats - Best: ${lastGen.bestFitness.toFixed(4)}, Worst: ${lastGen.worstFitness.toFixed(4)}, Avg: ${lastGen.averageFitness.toFixed(4)}`);
             self.postMessage({
                 type: "update",
                 payload: {
@@ -900,9 +819,9 @@ self.onmessage = (e) => {
         }
 
         history.endTime = Date.now();
-        console.log('Total duration:', ((history.endTime - history.inititialTime) / 1000.000).toFixed(3), 'seconds');
-        console.log('Optimization process finished:', { history, currentBestScore, perfectFitness, maxTeoricalFitness });
-        console.log('Best individuals:', Object.entries(history.individuals).sort((a, b) => (b[1].fitness || 0) - (a[1].fitness || 0)).map(x => x[1]));
+        log('Total duration:', ((history.endTime - history.inititialTime) / 1000.000).toFixed(3), 'seconds');
+        log('Optimization process finished:', { history, currentBestScore, perfectFitness, maxTeoricalFitness });
+        log('Best individuals:', Object.entries(history.individuals).sort((a, b) => (b[1].fitness || 0) - (a[1].fitness || 0)).map(x => x[1]));
         const combinationsN = Object.keys(history.individuals).length;
         const geneticSummary = Object.values(history.generations).map((x, _i) => ({
             inititialTime: x.inititialTime,

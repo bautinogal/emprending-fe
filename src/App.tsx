@@ -337,8 +337,10 @@ const Maraton = () => {
 
       const requiredAlumnosColumns = [
         'Fecha', 'Nombre', 'Apellido', 'Email', 'Rubro', 'Emprendimiento',
-        'Descripción', 'Puntaje', 'Tutor1', 'Tutor2', 'Tutor3', 'Tutor4', 'Tutor5'
+        'Descripción', 'Puntaje', 'MaxBloques', 'Tutor1', 'Tutor2', 'Tutor3', 'Tutor4', 'Tutor5', 'Tutor6', 'Tutor7'
       ];
+      // Columns whose absence in the CSV is tolerated (filled with '' and resolved at runtime).
+      const optionalAlumnosColumns = new Set(['MaxBloques']);
 
       const requiredTutoresColumns = [
         'Nombre', 'Apellido'
@@ -356,7 +358,7 @@ const Maraton = () => {
         const marcaTemporalIdx = headers.indexOf('Marca temporal');
         const emailIdx = headers.indexOf('Dirección de correo electrónico');
         const nombreCompletoIdx = headers.indexOf('Nombre completo');
-        const emprendimientoIdx = headers.indexOf('Emprendimiento (Nombre, web, redes)');
+        const emprendimientoIdx = headers.findIndex(h => h.startsWith('Emprendimiento'));
 
         for (let i = 1; i < rows.length; i++) {
           const values = rows[i];
@@ -379,10 +381,11 @@ const Maraton = () => {
             Emprendimiento: values[emprendimientoIdx] || '',
             Descripción: '', // Not in alternative format
             Puntaje: '10', // Default to 10 as requested
+            MaxBloques: '', // Not in alternative format — falls back to global default
           };
 
           // Extract tutors (Tutor 1, Tutor 2, etc.)
-          for (let tutorNum = 1; tutorNum <= 5; tutorNum++) {
+          for (let tutorNum = 1; tutorNum <= 7; tutorNum++) {
             const tutorIdx = headers.indexOf(`Tutor ${tutorNum}`);
             row[`Tutor${tutorNum}`] = tutorIdx !== -1 ? (values[tutorIdx] || '') : '';
           }
@@ -406,7 +409,7 @@ const Maraton = () => {
       // Detect alternative tutores format (e.g., "Inscripción Maratón" format)
       // This format has "Tutores" as the second column header
       if (type === 'tutores' && headers.includes('Tutores')) {
-        // Parse alternative format: extract nombre from "Tutores" column (format: "Nombre Apellido")
+        // Parse alternative format: keep full string (incl. duplas with " + ") as Nombre.
         const tutoresColumnIndex = headers.indexOf('Tutores');
         const data: any[] = [];
 
@@ -416,21 +419,16 @@ const Maraton = () => {
 
           // Skip empty rows and rows with "TOTAL"
           if (fullName && fullName.trim() !== '' && !fullName.toUpperCase().includes('TOTAL')) {
-            const nameParts = fullName.trim().split(/\s+/);
-            const nombre = nameParts[0] || '';
-            const apellido = nameParts.slice(1).join(' ') || '';
-
             data.push({
               id: data.length,
-              Nombre: nombre,
-              Apellido: apellido
+              Nombre: fullName.trim(),
+              Apellido: ''
             });
           }
         }
 
         const columns: GridColDef[] = [
-          { field: 'Nombre', headerName: 'Nombre', width: 120, sortable: true },
-          { field: 'Apellido', headerName: 'Apellido', width: 120, sortable: true }
+          { field: 'Nombre', headerName: 'Nombre', width: 320, sortable: true }
         ];
 
         return { data, columns };
@@ -438,7 +436,9 @@ const Maraton = () => {
 
       // Validate required columns
       const requiredColumns = type === 'alumnos' ? requiredAlumnosColumns : requiredTutoresColumns;
-      const missingColumns = requiredColumns.filter(col => !headers.includes(col));
+      const missingColumns = requiredColumns.filter(col =>
+        !headers.includes(col) && !(type === 'alumnos' && optionalAlumnosColumns.has(col))
+      );
       if (missingColumns.length > 0) {
         return {
           data: [],
@@ -475,6 +475,14 @@ const Maraton = () => {
             const numericValue = parseFloat(value);
             if (isNaN(numericValue) || numericValue < 0 || numericValue > 10) {
               validationErrors.push(`Fila ${i + 1}: El puntaje "${value}" debe ser un número entre 0 y 10`);
+            }
+          }
+
+          // Validate MaxBloques for alumnos (optional, must be a positive integer when present)
+          if (type === 'alumnos' && header === 'MaxBloques' && value !== '') {
+            const numericValue = parseInt(value, 10);
+            if (!Number.isFinite(numericValue) || numericValue < 1 || String(numericValue) !== value.trim()) {
+              validationErrors.push(`Fila ${i + 1}: El MaxBloques "${value}" debe ser un entero positivo`);
             }
           }
 
@@ -699,6 +707,21 @@ const Maraton = () => {
         </Box>
       };
 
+      const DefaultMaxBloquesInput = () => {
+        const value = useSelector((state: RootState) => state.app.parameters.defaultMaxBloquesPorAlumno);
+        return <TextField
+          type="number"
+          value={value}
+          inputProps={{ min: 1 }}
+          onChange={(e) => {
+            const n = parseInt(e.target.value, 10);
+            if (Number.isFinite(n) && n > 0) dispatch(setParameters({ defaultMaxBloquesPorAlumno: n }));
+          }}
+          variant="outlined"
+          size="small"
+        />
+      };
+
       const PesoRelativoTutores = () => {
         const pesoRelativoTutores = useSelector((state: RootState) => state.app.parameters.pesoRelativoTutores);
         const handlePesoChange = (index: number, value: string) => {
@@ -799,6 +822,13 @@ const Maraton = () => {
           <Box>
             <Typography variant="body1" sx={{ mb: 1 }} children={"Tutores por Grupo"} />
             <NumericMinMaxInput minKey="minTutoresPorGrupo" maxKey="maxTutoresPorGrupo" min={1} max={100} />
+          </Box>
+          <Box>
+            <Typography variant="body1" sx={{ mb: 1 }} children={"Máximo Bloques por Alumno (default)"} />
+            <DefaultMaxBloquesInput />
+            <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
+              Se usa cuando la columna "MaxBloques" del CSV está vacía.
+            </Typography>
           </Box>
           <Box>
             <Typography variant="body1" sx={{ mb: 1 }} children={"Peso Relativo Tutores"} />

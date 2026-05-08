@@ -1476,23 +1476,22 @@ const Maraton = () => {
                   <Typography variant="body2" fontWeight={600}>% Satisfacción</Typography>
                   <Typography variant="body2" fontWeight={600}>Tutores</Typography>
                 </Box>
-                {result.alumnos.map((student, index) => {
-                  const _student = student.tutores.reduce((p, t, idx) => {
-                    const maxSatisfaction = student.tutores.filter(x => x).reduce((p, _x, i) => p + pesoRelativoTutores[i], 0);
-                    const grupo = grupos.find(g => g.alumnos.find(x => x.id === student.id));
-                    const tutor = student.tutores.find(x => x.id === t.id);
+                {result.alumnos.map((student) => {
+                  const studentGrupos = grupos.filter(g => g.alumnos.find(x => x.id === student.id));
+                  const assignedTutorIds = new Set(studentGrupos.flatMap(g => g.tutores.map(tt => tt.id)));
+                  const maxSatisfaction = student.tutores.filter(x => x).reduce((p, _x, i) => p + pesoRelativoTutores[i], 0);
+
+                  return student.tutores.reduce((p, t, idx) => {
                     p.tutoresPedidos.push(t);
-                    if (grupo && !p.grupos.includes(grupo)) {
-                      p.grupos.push(grupo);
-                    };
-                    if (tutor && !p.tutores.includes(tutor)) {
-                      p.tutores.push(tutor);
+                    if (assignedTutorIds.has(t.id) && !p.tutores.find(x => x.id === t.id)) {
+                      p.tutores.push(t);
                       p.satisfaction = p.satisfaction + pesoRelativoTutores[idx] / maxSatisfaction;
-                    };
+                    }
                     return p;
-                  }, { grupos: [] as Grupo[], tutores: [] as Tutor[], tutoresPedidos: [] as Tutor[], satisfaction: 0, nombre: student.nombre, apellido: student.apellido });
-
-
+                  }, { grupos: studentGrupos, tutores: [] as Tutor[], tutoresPedidos: [] as Tutor[], satisfaction: 0, nombre: student.nombre, apellido: student.apellido });
+                })
+                .sort((a, b) => b.satisfaction - a.satisfaction)
+                .map((_student, index) => {
                   return <Box key={index} sx={{
                     display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 2fr', gap: 1,
                     p: 1, borderBottom: '1px solid', borderColor: 'divider', '&:hover': { bgcolor: 'grey.50' }
@@ -1591,15 +1590,16 @@ const Maraton = () => {
               }}
             >
               <Box sx={{ mt: 2 }}>
-                <Box sx={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr', gap: 1, mb: 1, p: 1, bgcolor: 'grey.100', borderRadius: 0.5 }}>
+                <Box sx={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr', gap: 1, mb: 1, p: 1, bgcolor: 'grey.100', borderRadius: 0.5 }}>
                   <Typography variant="body2" fontWeight={600}>Tutor</Typography>
                   <Typography variant="body2" fontWeight={600}>Selecciones</Typography>
+                  <Typography variant="body2" fontWeight={600}>Puntos</Typography>
                   <Typography variant="body2" fontWeight={600}>Asignados</Typography>
                   <Typography variant="body2" fontWeight={600}>% Efectividad</Typography>
                 </Box>
                 {(() => {
                   // Create tutor ranking data
-                  const tutorStats: Array<{ name: string, selected: number, matched: number, effectiveness: number }> = [];
+                  const tutorStats: Array<{ name: string, selected: number, points: number, matched: number, effectiveness: number }> = [];
 
                   // Uses the main normalizeName function
 
@@ -1607,38 +1607,34 @@ const Maraton = () => {
                   const validTutorNames = tutoresData.map((t: any) => `${t.Nombre} ${t.Apellido}`);
 
                   validTutorNames.forEach(tutorName => {
+                    const norm2 = normalizeName(tutorName);
                     let selectedCount = 0;
+                    let pointsSum = 0;
                     let matchedCount = 0;
 
-                    displayGrupos.forEach((group: any) => {
-                      group.alumnos.forEach((alumno: any) => {
-                        // Find the original CSV data for this alumno
-                        const originalAlumno = alumnosData.find((a: any) =>
-                          a.Nombre === alumno.nombre && a.Apellido === alumno.apellido && a.Email === alumno.email
-                        ) as any;
-                        for (let i = 1; i <= 5; i++) {
-                          const tutorPref = originalAlumno?.[`Tutor${i}`];
-                          if (tutorPref) {
-                            // Check if this preference matches current tutor (exact match after normalization)
-                            const norm1 = normalizeName(tutorPref);
-                            const norm2 = normalizeName(tutorName);
+                    result.alumnos.forEach((alumno: any) => {
+                      const originalAlumno = alumnosData.find((a: any) =>
+                        a.Nombre === alumno.nombre && a.Apellido === alumno.apellido && a.Email === alumno.email
+                      ) as any;
 
-                            if (norm1 === norm2) {
-                              selectedCount++;
-
-                              // Check if student actually got this tutor in their group
-                              const foundInGroup = group.tutores.some((groupTutor: string) => {
-                                const normGroupTutor = normalizeName(groupTutor);
-                                return normGroupTutor === norm2;
-                              });
-
-                              if (foundInGroup) {
-                                matchedCount++;
-                              }
-                            }
-                          }
+                      let selectedAtIdx = -1;
+                      for (let i = 1; i <= 7; i++) {
+                        const tutorPref = originalAlumno?.[`Tutor${i}`];
+                        if (tutorPref && normalizeName(tutorPref) === norm2) {
+                          selectedAtIdx = i - 1;
+                          break;
                         }
-                      });
+                      }
+                      if (selectedAtIdx === -1) return;
+
+                      selectedCount++;
+                      pointsSum += pesoRelativoTutores[selectedAtIdx] || 0;
+
+                      const studentGrupos = grupos.filter(g => g.alumnos.find(x => x.id === alumno.id));
+                      const wasAssigned = studentGrupos.some(g =>
+                        g.tutores.some(gt => normalizeName(`${gt.nombre} ${gt.apellido}`) === norm2)
+                      );
+                      if (wasAssigned) matchedCount++;
                     });
 
                     const effectiveness = selectedCount > 0 ? (matchedCount / selectedCount) * 100 : 0;
@@ -1646,13 +1642,17 @@ const Maraton = () => {
                     tutorStats.push({
                       name: tutorName,
                       selected: selectedCount,
+                      points: pointsSum,
                       matched: matchedCount,
                       effectiveness: effectiveness
                     });
                   });
 
-                  // Sort by selection count (most popular first), then by effectiveness
+                  // Sort by points (weighted popularity first), then by selections, then by effectiveness
                   tutorStats.sort((a, b) => {
+                    if (a.points !== b.points) {
+                      return b.points - a.points;
+                    }
                     if (a.selected !== b.selected) {
                       return b.selected - a.selected;
                     }
@@ -1662,7 +1662,7 @@ const Maraton = () => {
                   return tutorStats.map((tutor, index) => (
                     <Box key={index} sx={{
                       display: 'grid',
-                      gridTemplateColumns: '2fr 1fr 1fr 1fr',
+                      gridTemplateColumns: '2fr 1fr 1fr 1fr 1fr',
                       gap: 1,
                       p: 1,
                       borderBottom: '1px solid',
@@ -1671,6 +1671,7 @@ const Maraton = () => {
                     }}>
                       <Typography variant="body2">{tutor.name}</Typography>
                       <Typography variant="body2" textAlign="center">{tutor.selected}</Typography>
+                      <Typography variant="body2" textAlign="center" fontWeight={600}>{tutor.points}</Typography>
                       <Typography variant="body2" textAlign="center" sx={{
                         color: tutor.matched > 0 ? 'success.main' : 'text.secondary'
                       }}>
